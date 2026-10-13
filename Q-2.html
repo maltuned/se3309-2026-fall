@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>14 个服务，160 毫秒</title>
+<meta name="description" content="互联网产品开发与运维 · 思考题 2：三年后的选课平台从单体长成 14 个服务，首页响应时间却没有变长。五幕场景，五个问题。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EDF1F5;
+  --ink:#1B2530; --ink-2:#4A5866; --muted:#6B7885; --rule:#D8DEE5; --rule-strong:#B9C3CE;
+  --accent:#2251C9; --accent-ink:#1B41A3; --accent-soft:#E8EEFB;
+  --amber:#B8681A; --amber-soft:#FBF1E4;
+  --red:#C23B32; --red-soft:#FBE9E7;
+  --green:#2E8B57;
+  --serif:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1319; --surface:#151B23; --surface-2:#1B222C;
+    --ink:#E7ECF1; --ink-2:#B4BFCA; --muted:#8C98A4; --rule:#2B3541; --rule-strong:#3D4956;
+    --accent:#7FA3FF; --accent-ink:#A9C1FF; --accent-soft:#1B2740;
+    --amber:#E5A35A; --amber-soft:#2E2416;
+    --red:#F07A70; --red-soft:#3A1F1D;
+    --green:#5CC28A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1319; --surface:#151B23; --surface-2:#1B222C;
+  --ink:#E7ECF1; --ink-2:#B4BFCA; --muted:#8C98A4; --rule:#2B3541; --rule-strong:#3D4956;
+  --accent:#7FA3FF; --accent-ink:#A9C1FF; --accent-soft:#1B2740;
+  --amber:#E5A35A; --amber-soft:#2E2416;
+  --red:#F07A70; --red-soft:#3A1F1D;
+  --green:#5CC28A;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.75;
+  padding-inline:16px; padding-block:0 64px;
+}
+a{color:var(--accent-ink); text-decoration-color:var(--rule-strong); text-underline-offset:3px}
+a:hover{text-decoration-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+h1,h2,h3{font-family:var(--serif); font-weight:700; line-height:1.3; text-wrap:balance; margin:0}
+p{margin:0}
+strong{font-weight:600}
+code,.mono{font-family:var(--mono); font-size:.92em}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.sprite{position:absolute; width:0; height:0; overflow:hidden}
+
+.page{max-width:760px; margin:0 auto}
+
+/* ---------- header ---------- */
+.masthead{padding-block:40px 28px; border-bottom:1px solid var(--rule); display:grid; gap:20px}
+.eyebrow{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; color:var(--muted); font-size:13px; letter-spacing:.04em}
+.eyebrow .tag{font-family:var(--mono); font-size:12px; padding:2px 8px; border:1px solid var(--rule-strong); border-radius:3px; color:var(--ink-2)}
+.masthead h1{font-size:clamp(30px,6vw,44px); letter-spacing:.01em}
+.masthead .sub{color:var(--ink-2); font-size:17px; max-width:36em}
+.meta{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); margin:0}
+.meta div{background:var(--surface); padding:10px 14px}
+.meta dt{font-size:12px; color:var(--muted); letter-spacing:.06em}
+.meta dd{margin:2px 0 0; font-size:15px; font-weight:500}
+.meta dd .num{font-size:14px}
+
+.toc{display:flex; flex-wrap:wrap; gap:6px 4px; padding-block:14px; border-bottom:1px solid var(--rule); font-size:14px}
+.toc a{text-decoration:none; color:var(--ink-2); padding:3px 10px; border-radius:999px}
+.toc a:hover{background:var(--surface-2); color:var(--ink)}
+.toc a.q{color:var(--accent-ink)}
+
+/* ---------- prose ---------- */
+.prose{display:grid; gap:14px; max-width:42em}
+.prose ul{margin:0; padding-left:1.3em; display:grid; gap:6px}
+.lead{font-size:17px; color:var(--ink-2)}
+
+section.block{padding-block:40px; border-bottom:1px solid var(--rule); display:grid; gap:22px}
+section.block > h2{font-size:22px}
+.h-row{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap}
+.h-row .kicker{font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.08em}
+
+/* ---------- acts ---------- */
+.act{padding-block:44px; border-bottom:1px solid var(--rule); display:grid; grid-template-columns:72px 1fr; column-gap:20px}
+.act-body{display:grid; gap:22px; min-width:0}
+.act .numeral{font-family:var(--serif); font-weight:700; font-size:60px; line-height:1; color:var(--rule-strong); position:sticky; top:16px; align-self:start; padding-top:2px; font-variant-numeric:lining-nums}
+.act header{display:grid; gap:6px}
+.act header .kicker{font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.08em}
+.act header h2{font-size:26px}
+.act header .leads{font-size:14px; color:var(--muted)}
+.act header .leads b{color:var(--accent-ink); font-weight:500}
+@media (max-width:640px){
+  .act{grid-template-columns:1fr; row-gap:10px}
+  .act .numeral{position:static; font-size:40px; padding:0}
+}
+
+/* ---------- data tables ---------- */
+.tablewrap{overflow-x:auto; border:1px solid var(--rule); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:420px}
+caption{text-align:left; padding:10px 14px 8px; font-size:13px; color:var(--muted); caption-side:top; border-bottom:1px solid var(--rule)}
+th,td{padding:9px 14px; border-bottom:1px solid var(--rule); text-align:left; vertical-align:top}
+th{font-weight:500; color:var(--muted); font-size:13px; letter-spacing:.03em; background:var(--surface-2)}
+td:first-child,th:first-child{white-space:nowrap}
+td.n,th.n{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.bad{color:var(--red)}
+td.warn{color:var(--amber)}
+.sub-note{color:var(--muted); font-size:13px; font-family:var(--sans)}
+
+/* ---------- figures ---------- */
+figure{margin:0; display:grid; gap:10px}
+figure .fig{overflow-x:auto; background:var(--surface); border:1px solid var(--rule); padding:14px 12px}
+figure svg{display:block; width:100%; height:auto; max-width:100%; font-family:var(--sans); color:var(--ink)}
+figcaption{font-size:13.5px; color:var(--muted); line-height:1.6}
+figcaption b{color:var(--ink-2); font-weight:500}
+
+/* icon sprite styling — per-instance colors via custom properties on <use> */
+.ic-fill{fill:var(--ic-fill,var(--surface-2)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1.4; stroke-linejoin:round}
+.ic-slot{fill:var(--ic-slot,var(--surface)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1}
+.ic-screen{fill:var(--ic-screen,var(--surface)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1}
+.ic-stroke{fill:none; stroke:var(--ic-line,var(--ink-2)); stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round}
+.ic-stroke-b{fill:none; stroke:var(--ic-line,var(--ink-2)); stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round}
+.ic-dot{fill:var(--ic-line,var(--ink-2))}
+.ic-led{fill:var(--ic-led,var(--green))}
+.ic-led2{fill:var(--ic-line,var(--rule-strong)); opacity:.6}
+.u-acc{--ic-fill:var(--accent-soft); --ic-line:var(--accent)}
+.u-amber{--ic-fill:var(--amber-soft); --ic-line:var(--amber)}
+.u-red{--ic-fill:var(--red-soft); --ic-line:var(--red); --ic-led:var(--red)}
+.u-ghost{--ic-fill:var(--surface); --ic-line:var(--rule-strong); --ic-led:var(--rule-strong)}
+.u-ink{--ic-fill:var(--surface); --ic-line:var(--ink)}
+.u-muted{--ic-fill:var(--surface-2); --ic-line:var(--muted)}
+
+/* svg drawing classes */
+.box{fill:var(--surface); stroke:var(--ink-2); stroke-width:1.2}
+.box-bad{fill:var(--red-soft); stroke:var(--red); stroke-width:1.2}
+.chip{fill:var(--surface); stroke:var(--rule-strong); stroke-width:1}
+.ln{fill:none; stroke:var(--ink-2); stroke-width:1.2}
+.ln-thin{fill:none; stroke:var(--rule-strong); stroke-width:1}
+.ln-acc{fill:none; stroke:var(--accent); stroke-width:1.6}
+.ln-acc-b{fill:none; stroke:var(--accent); stroke-width:3}
+.ln-amber{fill:none; stroke:var(--amber); stroke-width:1.4}
+.ln-red{fill:none; stroke:var(--red); stroke-width:1.6}
+.dash{stroke-dasharray:5 4}
+.dots{stroke-dasharray:2 3}
+.grid{stroke:var(--rule); stroke-width:1}
+.axis{stroke:var(--rule-strong); stroke-width:1}
+.lbl{fill:var(--ink); font-size:12.5px}
+.lbl-s{fill:var(--ink-2); font-size:11px}
+.lbl-m{fill:var(--muted); font-size:11px}
+.lbl-acc{fill:var(--accent-ink); font-size:12px}
+.lbl-amber{fill:var(--amber); font-size:11.5px}
+.lbl-red{fill:var(--red); font-size:11.5px}
+.lbl-b{font-weight:600}
+.lbl-mono{font-family:var(--mono); font-size:11px}
+.mk-ink{fill:var(--ink-2)}
+.mk-acc{fill:var(--accent)}
+.mk-amber{fill:var(--amber)}
+.mk-red{fill:var(--red)}
+.pt{fill:var(--accent); stroke:var(--surface); stroke-width:1.5}
+.pt-2{fill:var(--surface); stroke:var(--accent); stroke-width:1.8}
+.pt-3{fill:var(--ink-2); stroke:var(--surface); stroke-width:1.5}
+.badge{fill:var(--amber)}
+.badge-t{fill:#fff; font-size:11px; font-weight:700}
+.evt-red{fill:var(--red)}
+.ground{stroke:var(--rule-strong); stroke-width:1.5; stroke-dasharray:1 5; stroke-linecap:round}
+
+/* ---------- director quote ---------- */
+.quote{display:grid; grid-template-columns:auto 1fr; gap:14px; padding:18px 20px; background:var(--surface); border:1px solid var(--rule); margin:0}
+.quote .who{display:grid; gap:6px; justify-items:center; align-content:start; padding-right:14px; border-right:1px solid var(--rule)}
+.quote .who svg{width:34px; height:42px; display:block}
+.quote .who span{font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:.04em; white-space:nowrap}
+.quote p{font-family:var(--serif); font-size:17.5px; line-height:1.8; color:var(--ink)}
+.quote p + p{margin-top:8px}
+
+/* ---------- observations ---------- */
+.obs{display:grid; gap:8px; padding:0; margin:0; list-style:none}
+.obs li{display:grid; grid-template-columns:26px 1fr; gap:10px; align-items:start; font-size:15px}
+.obs .n{width:22px; height:22px; border-radius:50%; background:var(--amber); color:#fff; font-family:var(--mono); font-size:12px; font-weight:700; display:grid; place-items:center; margin-top:3px}
+
+/* ---------- question card ---------- */
+.question{position:relative; background:var(--accent-soft); border:1px solid var(--accent); padding:26px 22px 22px; display:grid; gap:12px; margin-top:8px}
+.question .pill{position:absolute; top:-13px; left:16px; background:var(--accent); color:#fff; font-family:var(--mono); font-size:12px; letter-spacing:.06em; padding:3px 10px}
+.question h3{font-size:19px; color:var(--ink)}
+.question p, .question li{font-size:15.5px; line-height:1.75}
+.question ol{margin:0; padding-left:1.4em; display:grid; gap:6px}
+.question .adv{font-size:14px; color:var(--ink-2); border-top:1px dashed var(--rule-strong); padding-top:10px}
+.question .adv b{color:var(--muted); font-weight:500; font-family:var(--mono); font-size:12px; letter-spacing:.06em}
+
+/* ---------- rubric ---------- */
+.rubric{display:grid; grid-template-columns:auto 1fr; border:1px solid var(--rule); background:var(--surface)}
+.rubric > div{padding:12px 16px; border-bottom:1px solid var(--rule); font-size:15px}
+.rubric > div:nth-last-child(-n+2){border-bottom:none}
+.rubric .score{font-family:var(--mono); font-size:22px; font-weight:500; color:var(--accent-ink); border-right:1px solid var(--rule); display:grid; place-items:center; min-width:64px}
+.rubric .score.s1{color:var(--amber)} .rubric .score.s0{color:var(--muted)}
+.hard{padding:14px 18px; background:var(--amber-soft); border:1px solid var(--amber); font-size:14.5px}
+.refs{margin:0; padding-left:1.2em; display:grid; gap:8px; font-size:14.5px}
+.refs li{overflow-wrap:anywhere}
+
+footer{padding-block:28px; color:var(--muted); font-size:13px; display:flex; flex-wrap:wrap; gap:8px 20px}
+
+@media (prefers-reduced-motion: no-preference){
+  html{scroll-behavior:smooth}
+}
+
+/* ---------- print ---------- */
+@page{size:A4; margin:16mm 14mm}
+@media print{
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"]{
+    --ground:#FFFFFF; --surface:#FFFFFF; --surface-2:#F0F2F5;
+    --ink:#111820; --ink-2:#3A4654; --muted:#5C6773; --rule:#C9D0D8; --rule-strong:#9AA4AF;
+    --accent:#1F49B5; --accent-ink:#173A93; --accent-soft:#EDF1FB;
+    --amber:#A85E14; --amber-soft:#FBF3E8;
+    --red:#B4342C; --red-soft:#FBEDEB;
+    --green:#2E8B57;
+    color-scheme:light;
+  }
+  *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  html{scroll-behavior:auto}
+  body{padding:0; font-size:12.5pt; line-height:1.6}
+  .page{max-width:none}
+  .toc{display:none}
+  .masthead{padding-block:0 18px}
+  .masthead h1{font-size:26pt}
+  .masthead .sub{font-size:12pt}
+  section.block{padding-block:20px}
+  .act{padding-block:22px; grid-template-columns:48px 1fr; column-gap:14px}
+  .act header, .h-row, .masthead{break-after:avoid}
+  .prose p, .prose li{orphans:3; widows:3}
+  .act .numeral{position:static; font-size:34pt}
+  .act header h2{font-size:18pt}
+  .act-body{gap:14px}
+  figure, .question, .tablewrap, .quote, .rubric, .hard{break-inside:avoid}
+  figure .fig{padding:8px 6px; overflow:visible}
+  figcaption{font-size:9.5pt}
+  table{font-size:10.5pt; min-width:0}
+  th,td{padding:5px 8px}
+  .question{padding:18px 16px 16px}
+  .question p,.question li{font-size:11.5pt}
+  .quote p{font-size:12.5pt}
+  a{color:inherit; text-decoration:none}
+  .refs a[href^="http"]::after{content:" — " attr(href); font-family:var(--mono); font-size:9pt; color:var(--muted)}
+  footer{padding-block:12px; break-before:avoid}
+}
+
+/* ---------- 思考题 2 新增 ---------- */
+figure svg.wide{min-width:560px}
+.term{margin:0; padding:14px 16px; background:var(--surface); border:1px solid var(--rule); font-family:var(--mono); font-size:13px; line-height:1.7; overflow-x:auto; color:var(--ink)}
+.term .c{color:var(--muted)}
+.term .p{color:var(--accent-ink)}
+.facts{display:grid; gap:8px; padding:0; margin:0; list-style:none}
+.facts li{position:relative; padding-left:18px; font-size:15px}
+.facts li::before{content:""; position:absolute; left:2px; top:.72em; width:7px; height:7px; border-radius:50%; background:var(--amber)}
+.dataset{display:grid; gap:10px}
+.dataset > .tag{justify-self:start; font-family:var(--mono); font-size:12px; letter-spacing:.06em; color:var(--ink-2); border:1px solid var(--rule-strong); border-radius:3px; padding:1px 8px}
+.twocol{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px}
+td.hl{color:var(--accent-ink); font-weight:600}
+tr.sum td{font-weight:600; background:var(--surface-2)}
+
+/* svg 新增类 */
+.seg-0{fill:var(--surface-2); stroke:var(--rule-strong)}
+.seg-1{fill:var(--rule); stroke:var(--rule-strong)}
+.seg-acc{fill:var(--accent); stroke:var(--accent)}
+.seg-r{fill:var(--amber-soft); stroke:var(--amber)}
+.lbl-on{fill:var(--surface); font-size:11.5px; font-weight:600}
+.bar{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1}
+.bar-mut{fill:var(--surface-2); stroke:var(--rule-strong); stroke-width:1}
+.bar-root{fill:var(--surface-2); stroke:var(--ink-2); stroke-width:1.2}
+.bar-dash{fill:none; stroke:var(--muted); stroke-width:1; stroke-dasharray:3 2}
+.bar-amber{fill:var(--amber-soft); stroke:var(--amber); stroke-width:1}
+.bar-red{fill:var(--red-soft); stroke:var(--red); stroke-width:1}
+.band{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1}
+.shade{fill:var(--red-soft); opacity:.75}
+.hatch{fill:var(--surface-2); opacity:.9}
+.chip-acc{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1}
+.chip-amber{fill:var(--amber-soft); stroke:var(--amber); stroke-width:1}
+.pt-red{fill:var(--red); stroke:var(--surface); stroke-width:1.5}
+.pt-ghost{fill:var(--surface); stroke:var(--rule-strong); stroke-width:1.5; stroke-dasharray:2 2}
+.phone-body{fill:var(--surface-2); stroke:var(--ink-2); stroke-width:1.4}
+.phone-screen{fill:var(--surface); stroke:var(--rule-strong); stroke-width:1}
+.skel{fill:var(--rule)}
+@media print{
+  figure svg.wide{min-width:0}
+  .term{font-size:9.5pt; padding:8px 10px}
+  .dataset{break-inside:avoid}
+  .act-body{display:block}
+  .act-body > * + *{margin-top:14px}
+  .question{display:block; padding-top:14px; margin-top:0}
+  .question > * + *{margin-top:8px}
+  .question .pill{position:static; display:inline-block}
+  .dataset{display:block}
+  .dataset > * + *{margin-top:8px}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ icon sprite ============ -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-server" viewBox="0 0 48 64">
+      <rect x="4" y="2" width="40" height="60" rx="4" class="ic-fill"/>
+      <rect x="10" y="10" width="28" height="8" rx="2" class="ic-slot"/>
+      <rect x="10" y="24" width="28" height="8" rx="2" class="ic-slot"/>
+      <rect x="10" y="38" width="28" height="8" rx="2" class="ic-slot"/>
+      <circle cx="14" cy="55" r="2.4" class="ic-led"/>
+      <circle cx="21" cy="55" r="2.4" class="ic-led2"/>
+    </symbol>
+    <symbol id="i-db" viewBox="0 0 64 64">
+      <path d="M10 14v36c0 5 10 9 22 9s22-4 22-9V14" class="ic-fill"/>
+      <ellipse cx="32" cy="14" rx="22" ry="8" class="ic-fill"/>
+      <path d="M10 26c0 5 10 9 22 9s22-4 22-9M10 38c0 5 10 9 22 9s22-4 22-9" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-laptop" viewBox="0 0 64 48">
+      <rect x="8" y="3" width="48" height="33" rx="3" class="ic-fill"/>
+      <rect x="12" y="7" width="40" height="25" rx="1.5" class="ic-screen"/>
+      <rect x="14" y="9.5" width="36" height="4" rx="1" class="ic-slot"/>
+      <path d="M2 40h60l-3 5H5z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-phone" viewBox="0 0 32 56">
+      <rect x="3" y="2" width="26" height="52" rx="5" class="ic-fill"/>
+      <rect x="6" y="8" width="20" height="38" rx="1.5" class="ic-screen"/>
+      <circle cx="16" cy="50" r="2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-person" viewBox="0 0 32 40">
+      <circle cx="16" cy="9" r="7" class="ic-fill"/>
+      <path d="M3 39c0-10 6-17 13-17s13 7 13 17z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-crowd" viewBox="0 0 64 44">
+      <use href="#i-person" x="0" y="6" width="26" height="32"/>
+      <use href="#i-person" x="38" y="6" width="26" height="32"/>
+      <use href="#i-person" x="17" y="0" width="30" height="38"/>
+    </symbol>
+    <symbol id="i-lb" viewBox="0 0 64 48">
+      <rect x="2" y="4" width="60" height="40" rx="6" class="ic-fill"/>
+      <path d="M12 24h14M26 24l14-10h12M26 24h26M26 24l14 10h12" class="ic-stroke"/>
+      <circle cx="12" cy="24" r="3" class="ic-dot"/>
+      <circle cx="53" cy="14" r="2.5" class="ic-dot"/><circle cx="53" cy="24" r="2.5" class="ic-dot"/><circle cx="53" cy="34" r="2.5" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="20" class="ic-fill"/>
+      <path d="M24 24V10M24 24H12" class="ic-stroke-b"/>
+      <circle cx="24" cy="24" r="2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 40 48">
+      <path d="M11 20v-7a9 9 0 0 1 18 0v7" class="ic-stroke-b"/>
+      <rect x="5" y="20" width="30" height="24" rx="4" class="ic-fill"/>
+      <circle cx="20" cy="30" r="3" class="ic-dot"/><path d="M20 32v6" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-log" viewBox="0 0 40 48">
+      <path d="M6 4h20l8 8v32H6z" class="ic-fill"/>
+      <path d="M26 4v8h8" class="ic-stroke"/>
+      <path d="M12 21h16M12 28h16M12 35h10" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-pulse" viewBox="0 0 64 32">
+      <path d="M2 18h12l6-12 8 22 8-16 4 6h22" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-gauge" viewBox="0 0 48 32">
+      <path d="M4 28a20 20 0 0 1 40 0" class="ic-stroke"/>
+      <path d="M24 28L34 12" class="ic-stroke-b"/>
+      <circle cx="24" cy="28" r="3" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-warn" viewBox="0 0 48 44">
+      <path d="M24 3L46 41H2z" class="ic-fill"/>
+      <path d="M24 16v13" class="ic-stroke-b"/><circle cx="24" cy="35" r="2.2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-spin" viewBox="0 0 32 32">
+      <path d="M16 3A13 13 0 1 1 3 16" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-wrench" viewBox="0 0 40 40">
+      <path d="M27 4a9 9 0 0 0-9 12L5 29a3 3 0 0 0 4 4l13-13a9 9 0 0 0 12-9l-5 5-5-1-1-5z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-power" viewBox="0 0 32 32">
+      <path d="M10 9a10 10 0 1 0 12 0" class="ic-stroke-b"/><path d="M16 3v12" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-bubble" viewBox="0 0 48 40">
+      <path d="M4 4h40v24H18l-8 8v-8H4z" class="ic-fill"/>
+    </symbol>
+  
+    <symbol id="i-cloud" viewBox="0 0 64 44">
+      <path d="M17 40h31a11 11 0 0 0 2-21.8A15 15 0 0 0 21 14a12 12 0 0 0-4 26z" class="ic-fill"/>
+      <path d="M22 30h20M26 24h12" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-queue" viewBox="0 0 64 36">
+      <rect x="2" y="5" width="60" height="26" rx="13" class="ic-fill"/>
+      <rect x="12" y="11" width="9" height="14" rx="2" class="ic-slot"/>
+      <rect x="25" y="11" width="9" height="14" rx="2" class="ic-slot"/>
+      <rect x="38" y="11" width="9" height="14" rx="2" class="ic-slot"/>
+      <path d="M51 18h6" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 40 40">
+      <circle cx="17" cy="17" r="12" class="ic-fill"/><path d="M26 26l10 10" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-cube" viewBox="0 0 44 44">
+      <path d="M22 3l18 9v20l-18 9-18-9V12z" class="ic-fill"/><path d="M4 12l18 9 18-9M22 21v20" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-spark" viewBox="0 0 40 40">
+      <path d="M20 3c1.6 9.2 4.8 13.4 14 15-9.2 1.6-12.4 5.8-14 15-1.6-9.2-4.8-13.4-14-15 9.2-1.6 12.4-5.8 14-15z" class="ic-fill"/>
+      <path d="M33 4v6M30 7h6" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-star" viewBox="0 0 40 40">
+      <path d="M20 3l5.2 10.9 11.8 1.5-8.7 8.2 2.2 11.8L20 29.6 9.5 35.4l2.2-11.8L3 15.4l11.8-1.5z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-bolt" viewBox="0 0 32 40">
+      <path d="M19 2L5 23h10l-3 15 15-22H17z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-env" viewBox="0 0 44 32">
+      <rect x="2" y="3" width="40" height="26" rx="3" class="ic-fill"/><path d="M3 5l19 14L41 5" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-dc" viewBox="0 0 56 56">
+      <path d="M8 54V10l20-7 20 7v44z" class="ic-fill"/>
+      <rect x="15" y="16" width="8" height="6" class="ic-slot"/><rect x="33" y="16" width="8" height="6" class="ic-slot"/>
+      <rect x="15" y="27" width="8" height="6" class="ic-slot"/><rect x="33" y="27" width="8" height="6" class="ic-slot"/>
+      <rect x="15" y="38" width="8" height="6" class="ic-slot"/><rect x="33" y="38" width="8" height="6" class="ic-slot"/>
+      <path d="M2 54h52" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="13" class="ic-fill"/><path d="M10 16.5l4 4 8-9" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-gate" viewBox="0 0 110 100">
+      <path d="M4 10h102L66 50v32l-22 12V50z" class="ic-fill"/>
+      <path d="M22 22h66M36 34h38" class="ic-stroke"/>
+    </symbol>
+  </defs>
+</svg>
+<div class="page">
+
+<header class="masthead">
+  <div class="eyebrow">
+    <span>互联网产品开发与运维 · 2026 秋</span>
+    <span class="tag">思考题 2</span>
+    <span class="tag">M2 · 总评 10%</span>
+  </div>
+  <h1>14 个服务，160 毫秒</h1>
+  <p class="sub">三年后，选课平台从 1 个单体长成了 14 个服务，首页却比三年前还快。请把你们小组当作这个平台的架构组，也就是三年前那支运维团队：每一幕结束时都有人来问你们一个问题，你们要用这一幕的数据回答。</p>
+  <dl class="meta">
+    <div><dt>发布</dt><dd><span class="num">2026-10-10</span> 周六</dd></div>
+    <div><dt>截止</dt><dd><span class="num">2026-10-15</span> 周四 <span class="num">23:59</span></dd></div>
+    <div><dt>形式</dt><dd>小组完成 · Markdown</dd></div>
+    <div><dt>提交</dt><dd>同思考题 1</dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <a href="#bg">背景</a>
+  <a href="#act1">一 · 估算</a>
+  <a href="#act2">二 · 开放日</a>
+  <a href="#act3">三 · 提交</a>
+  <a href="#act4">四 · 事故</a>
+  <a href="#act5">五 · 评审</a>
+  <a href="#req" class="q">作答要求</a>
+  <a href="#rubric" class="q">评分</a>
+  <a href="#refs" class="q">参考</a>
+</nav>
+
+<!-- ============ 背景 ============ -->
+<section class="block" id="bg">
+  <div class="h-row"><span class="kicker">SCENE 0</span><h2>背景</h2></div>
+  <div class="prose">
+    <p class="lead">这道题只问一件事：<strong>平台变得越来越复杂，为什么响应时间没有显著增加？</strong>下面五幕各埋了一组数据，五个问题合起来，就是这件事的完整答案。所有数字来自压测和监控，已做简化，量级可以当真。</p>
+    <ul>
+      <li><strong>三年前</strong>（思考题 1 结束时）：Nginx 主备 + 4 台 Tomcat（单体应用）+ 1 台 MySQL，共 <span class="num">7</span> 台机器。</li>
+      <li><strong>现在</strong>：全校 <span class="num">5</span> 万名学生。平台拆成了 <span class="num">14</span> 个服务：API 网关、用户、课表、余量、选课、冲突检测、先修校验、评教、推荐、公告、通知、搜索、AI 选课助手、审计。数据层有 Redis、MySQL（一主两从）、Kafka、Elasticsearch 和对象存储，静态资源走 CDN，共约 <span class="num">70</span> 台机器。</li>
+      <li>三年间应用服务器的<strong>机型没有换过</strong>，单台机器的处理能力没变。</li>
+      <li>除注明"开放日"或"事故"的数据外，下面的数据都取自学期中一个普通工作日的上午，各服务 CPU 利用率在 <span class="num">20%～45%</span> 之间，<strong>不是选课高峰</strong>。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 312" role="img" aria-label="左侧是三年前的选课平台：浏览器、Nginx 主备、四台单体 Tomcat、一台 MySQL，共 7 台机器。右侧是现在的教务一站式平台：静态资源走 CDN，接口请求进 API 网关，网关后面是 13 个服务，再下面是 Redis、MySQL 一主两从、Kafka、Elasticsearch、对象存储、离线计算和可观测平台，共约 70 台机器。"><defs><marker id="f0a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker></defs><text x="18" y="22" class="lbl-m lbl-mono">三年前 · 7 台</text><use href="#i-laptop" x="86" y="34" width="56" height="42" class="u-ink"/><text x="114" y="92" text-anchor="middle" class="lbl-s">浏览器</text><line x1="114" y1="98" x2="114" y2="112" class="ln" marker-end="url(#f0a)"/><use href="#i-lb" x="96" y="120" width="60" height="38" class="u-ghost"/><use href="#i-lb" x="84" y="114" width="60" height="38" class="u-acc"/><text x="114" y="174" text-anchor="middle" class="lbl-s">Nginx 主备</text><line x1="114" y1="180" x2="48" y2="192" class="ln-thin"/><use href="#i-server" x="34" y="194" width="28" height="38" class="u-acc"/><line x1="114" y1="180" x2="90" y2="192" class="ln-thin"/><use href="#i-server" x="76" y="194" width="28" height="38" class="u-acc"/><line x1="114" y1="180" x2="132" y2="192" class="ln-thin"/><use href="#i-server" x="118" y="194" width="28" height="38" class="u-acc"/><line x1="114" y1="180" x2="174" y2="192" class="ln-thin"/><use href="#i-server" x="160" y="194" width="28" height="38" class="u-acc"/><text x="114" y="248" text-anchor="middle" class="lbl-s">Tomcat ×4 · 单体</text><line x1="114" y1="254" x2="114" y2="266" class="ln" marker-end="url(#f0a)"/><use href="#i-db" x="92" y="268" width="44" height="44" class="u-ink"/><text x="150" y="296" class="lbl-s">MySQL</text><line x1="236" y1="14" x2="236" y2="318" class="grid"/><text x="256" y="22" class="lbl-m lbl-mono">现在 · 约 70 台</text><use href="#i-phone" x="262" y="38" width="22" height="40" class="u-ink"/><use href="#i-laptop" x="288" y="42" width="50" height="36" class="u-ink"/><text x="300" y="94" text-anchor="middle" class="lbl-s">浏览器 / App</text><use href="#i-cloud" x="410" y="30" width="72" height="50" class="u-muted"/><text x="446" y="94" text-anchor="middle" class="lbl-s">CDN · 静态资源</text><line x1="342" y1="52" x2="404" y2="52" class="ln" marker-end="url(#f0a)"/><polyline points="342,70 372,104 560,104 584,82" class="ln" marker-end="url(#f0a)"/><text x="470" y="120" text-anchor="middle" class="lbl-m">接口请求</text><use href="#i-lb" x="586" y="34" width="72" height="46" class="u-acc"/><text x="666" y="54" class="lbl lbl-b">API 网关</text><text x="666" y="70" class="lbl-m">×3 · 鉴权、路由</text><line x1="622" y1="82" x2="622" y2="132" class="ln-thin"/><line x1="270" y1="132" x2="744" y2="132" class="ln-thin"/><rect x="268" y="142" width="64" height="24" rx="4" class="chip-acc"/><text x="300" y="158" text-anchor="middle" class="lbl-s">用户</text><rect x="337" y="142" width="64" height="24" rx="4" class="chip-acc"/><text x="369" y="158" text-anchor="middle" class="lbl-s">课表</text><rect x="406" y="142" width="64" height="24" rx="4" class="chip-acc"/><text x="438" y="158" text-anchor="middle" class="lbl-s">余量</text><rect x="475" y="142" width="64" height="24" rx="4" class="chip-acc"/><text x="507" y="158" text-anchor="middle" class="lbl-s">选课</text><rect x="544" y="142" width="64" height="24" rx="4" class="chip-acc"/><text x="576" y="158" text-anchor="middle" class="lbl-s">冲突检测</text><rect x="613" y="142" width="64" height="24" rx="4" class="chip-acc"/><text x="645" y="158" text-anchor="middle" class="lbl-s">先修校验</text><rect x="682" y="142" width="64" height="24" rx="4" class="chip-acc"/><text x="714" y="158" text-anchor="middle" class="lbl-s">评教</text><rect x="302.5" y="174" width="64" height="24" rx="4" class="chip-acc"/><text x="334.5" y="190" text-anchor="middle" class="lbl-s">推荐</text><rect x="371.5" y="174" width="64" height="24" rx="4" class="chip-acc"/><text x="403.5" y="190" text-anchor="middle" class="lbl-s">公告</text><rect x="440.5" y="174" width="64" height="24" rx="4" class="chip-acc"/><text x="472.5" y="190" text-anchor="middle" class="lbl-s">通知</text><rect x="509.5" y="174" width="64" height="24" rx="4" class="chip-acc"/><text x="541.5" y="190" text-anchor="middle" class="lbl-s">搜索</text><rect x="578.5" y="174" width="64" height="24" rx="4" class="chip-acc"/><text x="610.5" y="190" text-anchor="middle" class="lbl-s">AI 助手</text><rect x="647.5" y="174" width="64" height="24" rx="4" class="chip-acc"/><text x="679.5" y="190" text-anchor="middle" class="lbl-s">审计</text><text x="507" y="216" text-anchor="middle" class="lbl-m">13 个服务 · 34 个实例</text><line x1="270" y1="226" x2="744" y2="226" class="ln-thin dash"/><use href="#i-bolt" x="290.9" y="238" width="26" height="30" class="u-amber"/><text x="303.9" y="286" text-anchor="middle" class="lbl-s">Redis</text><text x="303.9" y="300" text-anchor="middle" class="lbl-m">×9</text><use href="#i-db" x="354.6" y="234" width="34" height="34" class="u-ink"/><text x="371.6" y="286" text-anchor="middle" class="lbl-s">MySQL</text><text x="371.6" y="300" text-anchor="middle" class="lbl-m">一主两从</text><use href="#i-queue" x="416.3" y="242" width="46" height="26" class="u-ink"/><text x="439.3" y="286" text-anchor="middle" class="lbl-s">Kafka</text><text x="439.3" y="300" text-anchor="middle" class="lbl-m">×3</text><use href="#i-search" x="492" y="238" width="30" height="30" class="u-ink"/><text x="507" y="286" text-anchor="middle" class="lbl-s">Elasticsearch</text><text x="507" y="300" text-anchor="middle" class="lbl-m">×3</text><use href="#i-cube" x="558.7" y="236" width="32" height="32" class="u-ink"/><text x="574.7" y="286" text-anchor="middle" class="lbl-s">对象存储</text><use href="#i-server" x="630.4" y="236" width="24" height="32" class="u-muted"/><text x="642.4" y="286" text-anchor="middle" class="lbl-s">离线计算</text><text x="642.4" y="300" text-anchor="middle" class="lbl-m">×8</text><use href="#i-pulse" x="688.1" y="246" width="44" height="22" class="u-ink"/><text x="710.1" y="286" text-anchor="middle" class="lbl-s">可观测</text><text x="710.1" y="300" text-anchor="middle" class="lbl-m">×4</text></svg>
+    </div>
+    <figcaption><b>三年里，平台从 7 台机器长到了约 70 台。</b>左边是思考题 1 结束时的样子；右边的每一块都是这三年陆续加上去的：静态资源交给 CDN，接口请求经 API 网关分给 13 个服务，服务下面是缓存、数据库、消息队列、搜索、离线计算和可观测平台。</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <caption>监控大盘 · 浏览器端测量</caption>
+      <thead><tr><th>指标</th><th class="n">三年前</th><th class="n">现在</th></tr></thead>
+      <tbody>
+        <tr><td>首页数据接口 p50</td><td class="n">180 ms</td><td class="n hl">160 ms</td></tr>
+        <tr><td>首页数据接口 p99</td><td class="n">600 ms</td><td class="n bad">1.1 s</td></tr>
+        <tr><td>选课提交 p50</td><td class="n">450 ms</td><td class="n hl">60 ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 第一幕 ============ -->
+<section class="act" id="act1">
+  <div class="numeral" aria-hidden="true">1</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 1</span>
+    <h2>估算</h2>
+    <p class="leads">引出 <b>问题 1 · 响应时间由什么决定</b></p>
+  </header>
+
+  <div class="prose"><p>新来的实习生小林在周报里写道：</p></div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>实习生小林</span></div>
+    <div><p>"我在宿舍用 curl 调了一次公告接口，20 ms。首页要经过 14 个服务（网关 + 13 个下游服务），14 × 20 = 280 ms，比三年前单体的 180 ms 慢了一半多。"</p><p>"可监控显示只有 160 ms，是不是采样有问题？"</p></div>
+  </blockquote>
+
+  <div class="dataset">
+    <span class="tag">① 小林的 curl 输出</span>
+    <pre class="term"><span class="p">$</span> curl -o /dev/null -s -w "@fmt.txt" https://xk.example.edu/api/notice/latest
+  time_namelookup:     1 ms   <span class="c"># DNS 解析完成</span>
+  time_connect:        6 ms   <span class="c"># TCP 握手完成</span>
+  time_appconnect:    11 ms   <span class="c"># TLS 握手完成</span>
+  time_starttransfer: 19 ms   <span class="c"># 收到响应的第一个字节</span>
+  time_total:         20 ms</pre>
+    <div class="prose"><p>时间是从发起请求开始累计的。宿舍在校园网内，到机房的网络往返时间（RTT）约 <span class="num">5</span> ms。</p></div>
+  </div>
+
+  <div class="dataset">
+    <span class="tag">② 机房里的调用</span>
+    <div class="prose"><p>服务之间用 gRPC 通信，底层是 HTTP/2 长连接，建好后一直复用。机房内 RTT 约 <span class="num">0.2</span> ms。一次服务间调用除去被调服务自身的处理时间，额外开销约 <span class="num">0.5</span> ms（序列化、网络、框架）。下面链路图里每个调用的耗时都已经包含了这 0.5 ms。</p></div>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 238" role="img" aria-label="上半部分：小林在宿舍用 curl 调一次接口，20 毫秒依次分为 DNS、TCP 握手、TLS 握手、请求往返、服务端处理和传输几段。下半部分：同样的时间刻度上，机房内一次服务间调用只有约 0.5 毫秒额外开销加上被调服务自身的处理时间。"><use href="#i-laptop" x="22" y="18" width="64" height="48" class="u-ink"/><text x="54" y="84" text-anchor="middle" class="lbl-s">宿舍 · 小林的笔记本</text><use href="#i-dc" x="680" y="12" width="56" height="56" class="u-acc"/><text x="708" y="84" text-anchor="middle" class="lbl-s">机房</text><line x1="96" y1="44" x2="672" y2="44" class="ln-thin dash"/><text x="384" y="36" text-anchor="middle" class="lbl-m">校园网 · 往返一次（RTT）约 5 ms</text><text x="10" y="125" class="lbl-s">小林测到的</text><text x="10" y="140" class="lbl-s">一次调用</text><rect x="128" y="112" width="29.5" height="30" class="seg-0" stroke-width="1"/><text x="142.8" y="132" text-anchor="middle" class="lbl-s">DNS</text><rect x="157.5" y="112" width="147.5" height="30" class="seg-1" stroke-width="1"/><text x="231.2" y="132" text-anchor="middle" class="lbl-s">TCP 握手</text><rect x="305" y="112" width="147.5" height="30" class="seg-1" stroke-width="1"/><text x="378.8" y="132" text-anchor="middle" class="lbl-s">TLS 握手</text><rect x="452.5" y="112" width="147.5" height="30" class="seg-1" stroke-width="1"/><text x="526.2" y="132" text-anchor="middle" class="lbl-s">请求往返</text><rect x="600" y="112" width="88.5" height="30" class="seg-acc" stroke-width="1"/><text x="644.2" y="132" text-anchor="middle" class="lbl-on">服务端</text><rect x="688.5" y="112" width="29.5" height="30" class="seg-0" stroke-width="1"/><text x="724" y="132" class="lbl-m">传输</text><line x1="128" y1="142" x2="128" y2="147" class="axis"/><text x="128" y="160" text-anchor="middle" class="lbl-m lbl-mono">0</text><line x1="275.5" y1="142" x2="275.5" y2="147" class="axis"/><text x="275.5" y="160" text-anchor="middle" class="lbl-m lbl-mono">5</text><line x1="423" y1="142" x2="423" y2="147" class="axis"/><text x="423" y="160" text-anchor="middle" class="lbl-m lbl-mono">10</text><line x1="570.5" y1="142" x2="570.5" y2="147" class="axis"/><text x="570.5" y="160" text-anchor="middle" class="lbl-m lbl-mono">15</text><line x1="718" y1="142" x2="718" y2="147" class="axis"/><text x="718" y="160" text-anchor="middle" class="lbl-m lbl-mono">20 ms</text><text x="10" y="209" class="lbl-s">机房内一次</text><text x="10" y="224" class="lbl-s">服务间调用</text><rect x="128" y="196" width="14.8" height="30" class="seg-1" stroke-width="1"/><rect x="142.8" y="196" width="44.2" height="30" class="seg-acc" stroke-width="1"/><text x="197" y="209" class="lbl-s">≈ 0.5 ms 额外开销（长连接复用，无需握手）</text><text x="197" y="224" class="lbl-m">+ 被调服务自身的处理时间（此处以 1.5 ms 示意）</text></svg>
+    </div>
+    <figcaption><b>小林测到的 20 ms 按时间顺序拆开。</b>深蓝色是服务端真正处理的部分，灰色是 DNS、两次握手、请求往返和传输，各段多长请对照 curl 输出自己算。下面一条按同一刻度画出机房内一次服务间调用：连接早已建好，不用握手，往返也只有 0.2 ms。</figcaption>
+  </figure>
+
+  <div class="dataset">
+    <span class="tag">③ 首页数据接口 /api/home 的一次链路追踪</span>
+    <div class="prose"><p>依赖关系：网关先验证登录令牌、查学生信息；拿到学生 ID 后，其余调用同时发出；冲突检测和先修校验要用到"我的课表"和"已选课程"的结果；审计记录投递到 Kafka 后<strong>不等待</strong>处理结果。</p></div>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 416" role="img" aria-label="首页数据接口一次请求的链路追踪瀑布图。网关在 0 到 1 毫秒验证令牌，1 到 5 毫秒调用用户服务；第 5 毫秒同时发出课表 9 毫秒、已选课程 6 毫秒、余量 2 毫秒、公告 2 毫秒、通知 3 毫秒、评教 6 毫秒、推荐 20 毫秒、搜索 4 毫秒、AI 助手 7 毫秒和审计投递 1 毫秒（不等待）；第 14 毫秒课表与已选课程返回后，发出冲突检测 16 毫秒和先修校验 10 毫秒；第 30 到 35 毫秒网关组装响应，整个请求 35 毫秒。"><line x1="186" y1="30" x2="186" y2="390" class="grid"/><text x="186" y="406" text-anchor="middle" class="lbl-m lbl-mono">0</text><line x1="254" y1="30" x2="254" y2="390" class="grid"/><text x="254" y="406" text-anchor="middle" class="lbl-m lbl-mono">5</text><line x1="322" y1="30" x2="322" y2="390" class="grid"/><text x="322" y="406" text-anchor="middle" class="lbl-m lbl-mono">10</text><line x1="390" y1="30" x2="390" y2="390" class="grid"/><text x="390" y="406" text-anchor="middle" class="lbl-m lbl-mono">15</text><line x1="458" y1="30" x2="458" y2="390" class="grid"/><text x="458" y="406" text-anchor="middle" class="lbl-m lbl-mono">20</text><line x1="526" y1="30" x2="526" y2="390" class="grid"/><text x="526" y="406" text-anchor="middle" class="lbl-m lbl-mono">25</text><line x1="594" y1="30" x2="594" y2="390" class="grid"/><text x="594" y="406" text-anchor="middle" class="lbl-m lbl-mono">30</text><line x1="662" y1="30" x2="662" y2="390" class="grid"/><text x="662" y="406" text-anchor="middle" class="lbl-m lbl-mono">35</text><line x1="730" y1="30" x2="730" y2="390" class="grid"/><text x="730" y="406" text-anchor="middle" class="lbl-m lbl-mono">40 ms</text><line x1="254" y1="22" x2="254" y2="390" class="ln-amber dots"/><text x="250" y="18" text-anchor="end" class="lbl-amber">拿到学生 ID，其余调用同时发出</text><line x1="376.4" y1="22" x2="376.4" y2="390" class="ln-amber dots"/><text x="380.4" y="18" text-anchor="start" class="lbl-amber">课表与已选课程都已返回</text><text x="8" y="52" class="lbl lbl-b">网关 /api/home</text><rect x="186" y="41" width="476" height="14" class="bar-root"/><text x="668" y="52" class="lbl-s lbl-mono">35 ms</text><line x1="8" y1="61" x2="750" y2="61" class="ln-thin"/><text x="8" y="74" class="lbl-s">网关 · 验证登录令牌</text><rect x="186" y="64" width="13.6" height="12" class="bar-mut"/><text x="204.6" y="74" class="lbl-m lbl-mono">1 ms</text><text x="8" y="96" class="lbl">用户服务</text><rect x="199.6" y="86" width="54.4" height="12" class="bar"/><text x="259" y="96" class="lbl-m lbl-mono">4 ms</text><text x="8" y="118" class="lbl">课表服务</text><rect x="254" y="108" width="122.4" height="12" class="bar"/><text x="381.4" y="118" class="lbl-m lbl-mono">9 ms</text><text x="8" y="140" class="lbl">选课服务 · 已选课程</text><rect x="254" y="130" width="81.6" height="12" class="bar"/><text x="340.6" y="140" class="lbl-m lbl-mono">6 ms</text><text x="8" y="162" class="lbl">余量服务（批量）</text><rect x="254" y="152" width="27.2" height="12" class="bar"/><text x="286.2" y="162" class="lbl-m lbl-mono">2 ms</text><text x="8" y="184" class="lbl">公告服务</text><rect x="254" y="174" width="27.2" height="12" class="bar"/><text x="286.2" y="184" class="lbl-m lbl-mono">2 ms</text><text x="8" y="206" class="lbl">通知服务 · 未读数</text><rect x="254" y="196" width="40.8" height="12" class="bar"/><text x="299.8" y="206" class="lbl-m lbl-mono">3 ms</text><text x="8" y="228" class="lbl">评教服务 · 待评教</text><rect x="254" y="218" width="81.6" height="12" class="bar"/><text x="340.6" y="228" class="lbl-m lbl-mono">6 ms</text><text x="8" y="250" class="lbl">推荐服务</text><rect x="254" y="240" width="272" height="12" class="bar"/><text x="531" y="250" class="lbl-m lbl-mono">20 ms</text><text x="8" y="272" class="lbl">搜索服务 · 热门搜索</text><rect x="254" y="262" width="54.4" height="12" class="bar"/><text x="313.4" y="272" class="lbl-m lbl-mono">4 ms</text><text x="8" y="294" class="lbl">AI 助手 · 欢迎语</text><rect x="254" y="284" width="95.2" height="12" class="bar"/><text x="354.2" y="294" class="lbl-m lbl-mono">7 ms</text><text x="8" y="316" class="lbl-s">审计服务 · 投递 Kafka</text><rect x="254" y="306" width="13.6" height="12" class="bar-dash"/><text x="272.6" y="316" class="lbl-m lbl-mono">1 ms · 不等待</text><text x="8" y="338" class="lbl">冲突检测服务</text><rect x="376.4" y="328" width="217.6" height="12" class="bar"/><text x="599" y="338" class="lbl-m lbl-mono">16 ms</text><text x="8" y="360" class="lbl">先修校验服务</text><rect x="376.4" y="350" width="136" height="12" class="bar"/><text x="517.4" y="360" class="lbl-m lbl-mono">10 ms</text><text x="8" y="382" class="lbl-s">网关 · 组装响应</text><rect x="594" y="372" width="68" height="12" class="bar-mut"/><text x="667" y="382" class="lbl-m lbl-mono">5 ms</text></svg>
+    </div>
+    <figcaption><b>一次首页请求的链路追踪（典型请求，从网关收到请求开始计时）。</b>每一行是一次调用，横条的起点和长度就是它的开始时间和耗时；两条橙色点线标出了依赖关系中的两个时刻。虚线框的审计投递完就走，网关不等它。</figcaption>
+  </figure>
+
+  <div class="twocol">
+    <div class="tablewrap">
+      <table>
+        <caption>④ 三年前单体的首页 · 顺序执行，p50</caption>
+        <thead><tr><th>步骤</th><th class="n">耗时</th></tr></thead>
+        <tbody>
+          <tr><td>查学生信息（MySQL）</td><td class="n">4 ms</td></tr>
+          <tr><td>查我的课表（MySQL）</td><td class="n">12 ms</td></tr>
+          <tr><td>查已选课程（MySQL）</td><td class="n">7 ms</td></tr>
+          <tr><td>冲突检测（进程内计算）</td><td class="n">6 ms</td></tr>
+          <tr><td>查余量（本地缓存）</td><td class="n">1 ms</td></tr>
+          <tr><td>查公告（MySQL）</td><td class="n">10 ms</td></tr>
+          <tr><td>查未读消息数（MySQL）</td><td class="n">9 ms</td></tr>
+          <tr><td>组装 JSON</td><td class="n">6 ms</td></tr>
+          <tr class="sum"><td>合计</td><td class="n">55 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose" style="align-content:start">
+      <p>那时的首页<strong>没有</strong>推荐、评教、热门搜索和 AI 助手。</p>
+      <p>现在这些都有了，而且每一项都是一次跨机器的调用。</p>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>⑤ 学生感知的时间拆开看 · 前端埋点，p50</caption>
+      <thead><tr><th>环节</th><th class="n">三年前</th><th class="n">现在</th></tr></thead>
+      <tbody>
+        <tr><td>建连（DNS + TCP + TLS，按连接复用比例折算）</td><td class="n">25 ms</td><td class="n">25 ms</td></tr>
+        <tr><td>网络往返与传输（全体学生的中位数，含校外与移动网络，RTT 约 30 ms）</td><td class="n">50 ms</td><td class="n">50 ms</td></tr>
+        <tr><td>服务端处理（网关收到请求到发出响应）</td><td class="n">55 ms</td><td class="n hl">35 ms</td></tr>
+        <tr><td>浏览器解析与渲染</td><td class="n">50 ms</td><td class="n">50 ms</td></tr>
+        <tr class="sum"><td>合计</td><td class="n">180 ms</td><td class="n">160 ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 214" role="img" aria-label="两条堆叠横条对比学生感知的首页时间。三年前 180 毫秒：建连 25、网络往返与传输 50、服务端 55、解析与渲染 50。现在 160 毫秒：建连 25、网络往返与传输 50、服务端 35、解析与渲染 50。现在的 14 个服务全部包含在 35 毫秒的服务端那一段里。"><text x="10" y="51" class="lbl lbl-b">三年前</text><text x="10" y="66" class="lbl-m">单体 · 7 台</text><rect x="150" y="36" width="68.8" height="34" class="seg-0" stroke-width="1"/><text x="184.4" y="57" text-anchor="middle" class="lbl-s">建连 25</text><rect x="218.8" y="36" width="137.5" height="34" class="seg-1" stroke-width="1"/><text x="287.5" y="57" text-anchor="middle" class="lbl-s">网络往返与传输 50</text><rect x="356.2" y="36" width="151.2" height="34" class="seg-acc" stroke-width="1"/><text x="431.9" y="57" text-anchor="middle" class="lbl-on">服务端 55</text><rect x="507.5" y="36" width="137.5" height="34" class="seg-r" stroke-width="1"/><text x="576.2" y="57" text-anchor="middle" class="lbl-s">解析与渲染 50</text><text x="653" y="58" class="lbl lbl-b lbl-mono">180 ms</text><text x="10" y="119" class="lbl lbl-b">现在</text><text x="10" y="134" class="lbl-m">14 个服务</text><rect x="150" y="104" width="68.8" height="34" class="seg-0" stroke-width="1"/><text x="184.4" y="125" text-anchor="middle" class="lbl-s">建连 25</text><rect x="218.8" y="104" width="137.5" height="34" class="seg-1" stroke-width="1"/><text x="287.5" y="125" text-anchor="middle" class="lbl-s">网络往返与传输 50</text><rect x="356.2" y="104" width="96.2" height="34" class="seg-acc" stroke-width="1"/><text x="404.4" y="125" text-anchor="middle" class="lbl-on">服务端 35</text><rect x="452.5" y="104" width="137.5" height="34" class="seg-r" stroke-width="1"/><text x="521.2" y="125" text-anchor="middle" class="lbl-s">解析与渲染 50</text><text x="598" y="126" class="lbl lbl-b lbl-mono">160 ms</text><path d="M356.2 146v6h96.2v-6" class="ln-acc"/><text x="404.4" y="168" text-anchor="middle" class="lbl-acc">14 个服务都在这 35 ms 里</text><line x1="150" y1="186" x2="700" y2="186" class="axis"/><line x1="150" y1="186" x2="150" y2="191" class="axis"/><text x="150" y="204" text-anchor="middle" class="lbl-m lbl-mono">0</text><line x1="287.5" y1="186" x2="287.5" y2="191" class="axis"/><text x="287.5" y="204" text-anchor="middle" class="lbl-m lbl-mono">50</text><line x1="425" y1="186" x2="425" y2="191" class="axis"/><text x="425" y="204" text-anchor="middle" class="lbl-m lbl-mono">100</text><line x1="562.5" y1="186" x2="562.5" y2="191" class="axis"/><text x="562.5" y="204" text-anchor="middle" class="lbl-m lbl-mono">150</text><line x1="700" y1="186" x2="700" y2="191" class="axis"/><text x="700" y="204" text-anchor="middle" class="lbl-m lbl-mono">200 ms</text></svg>
+    </div>
+    <figcaption><b>学生等的 160 ms 里，服务端只是其中一段。</b>两条横条按同一刻度画出三年前和现在。三年里变了的只有深蓝色那一段，14 个服务全在里面。</figcaption>
+  </figure>
+
+  <div class="dataset">
+    <span class="tag">⑥ 一次回退</span>
+    <div class="prose"><p>去年 3 月的一个版本里，有人把"批量查询余量"改成了"候选列表里每门课各调一次余量服务"。候选列表平均 <span class="num">30</span> 门课，每次调用约 <span class="num">2</span> ms，一门接一门地调。那一周首页 p50 涨到了 <span class="num">195</span> ms，链路图上余量那一行变成了 30 根首尾相接的短条。</p></div>
+  </div>
+
+  <div class="question">
+    <span class="pill">问题 1</span>
+    <h3>响应时间由什么决定？</h3>
+    <ol type="a">
+      <li>用 curl 的数据拆开小林测到的 20 ms：其中多少是服务端处理，其余是什么？为什么机房内的服务间调用不用每次都付这些时间？</li>
+      <li>根据链路图和依赖关系，找出首页的<strong>关键路径</strong>并算出它的长度；再算出 13 个下游调用的耗时之和。首页服务端耗时更接近哪一个，为什么？推荐服务最多再慢几毫秒，首页还不受影响？</li>
+      <li>对照三年前的单体：现在做的事更多，服务端耗时为什么反而从 55 ms 降到 35 ms？"拆成服务"本身让关键路径多了多少时间？在学生感知的 160 ms 里服务端占多少，这对"多几个服务会不会变慢"意味着什么？</li>
+      <li>余量逐门调用的那一周，首页为什么正好涨到 195 ms？除此之外，再举一种拆分确实会让响应时间显著变长的情形。</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第二幕 ============ -->
+<section class="act" id="act2">
+  <div class="numeral" aria-hidden="true">2</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 2</span>
+    <h2>开放日</h2>
+    <p class="leads">引出 <b>问题 2 · 缓存与命中率悬崖</b></p>
+  </header>
+
+  <div class="prose"><p>先看平时。一次首页打开，请求在每一层被挡掉多少：</p></div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>请求在各层的去向</caption>
+      <thead><tr><th>层</th><th>在这一层就处理完的请求</th><th class="n">典型耗时</th></tr></thead>
+      <tbody>
+        <tr><td>浏览器缓存</td><td>静态资源（JS、CSS、图片、字体，共 2.3 MB）中的 80%</td><td class="n">0<span class="sub-note">（不发请求）</span></td></tr>
+        <tr><td>CDN 边缘节点</td><td>静态资源中的 16%</td><td class="n">约 10 ms</td></tr>
+        <tr><td>机房（网关 → 各服务）</td><td>回源的 4% 静态资源；<code>/api/home</code> 每次都要进机房</td><td class="n">见第一幕</td></tr>
+        <tr><td>服务内的缓存（Redis）</td><td>以余量服务为例：选课高峰时命中率 97%</td><td class="n">约 1 ms</td></tr>
+        <tr><td>MySQL</td><td>余量查询中没命中缓存的 3%</td><td class="n">约 25 ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 270" role="img" aria-label="两条逐层变细的通道。上面是首页的 2.3 MB 静态资源：浏览器缓存挡掉 80%，CDN 边缘节点再挡掉 16%，只有 4% 回源到机房。下面是首页数据接口里的一次余量查询：它直接穿过浏览器和 CDN 进入机房，经网关到余量服务，在 Redis 缓存命中 97%，约 1 毫秒；只有 3% 落到 MySQL，约 25 毫秒。"><polygon points="24,52 96,52 120,77.6 262,77.6 286,82.7 430,82.7 430,85.3 286,85.3 262,90.4 120,90.4 96,116 24,116" class="band"/><text x="18" y="22" class="lbl-m lbl-mono">静态资源 · JS、CSS、图片、字体共 2.3 MB</text><use href="#i-laptop" x="66" y="62" width="60" height="44" class="u-ink"/><use href="#i-cloud" x="228" y="60" width="68" height="46" class="u-muted"/><use href="#i-dc" x="406" y="58" width="48" height="48" class="u-acc"/><text x="96" y="50" text-anchor="middle" class="lbl lbl-b">浏览器缓存</text><text x="96" y="126" text-anchor="middle" class="lbl-s">挡掉 80% · 0 ms</text><text x="262" y="50" text-anchor="middle" class="lbl lbl-b">CDN 边缘节点</text><text x="262" y="126" text-anchor="middle" class="lbl-s">挡掉 16% · 约 10 ms</text><text x="430" y="50" text-anchor="middle" class="lbl lbl-b">机房</text><text x="430" y="126" text-anchor="middle" class="lbl-s">回源 4%</text><text x="18" y="162" class="lbl-m lbl-mono">/api/home 里的一次余量查询</text><polygon points="24,209 592,209 616,219 712,219 712,221 616,221 592,231 24,231" class="band"/><rect x="62" y="209" width="68" height="22" rx="11" class="chip"/><text x="96" y="224" text-anchor="middle" class="lbl-m">直接穿过</text><rect x="228" y="209" width="68" height="22" rx="11" class="chip"/><text x="262" y="224" text-anchor="middle" class="lbl-m">直接穿过</text><use href="#i-lb" x="400" y="201" width="60" height="38" class="u-acc"/><text x="430" y="192" text-anchor="middle" class="lbl lbl-b">网关 → 余量服务</text><text x="430" y="256" text-anchor="middle" class="lbl-s">个性化数据，每次都进机房</text><use href="#i-bolt" x="577" y="201" width="30" height="38" class="u-amber"/><text x="592" y="192" text-anchor="middle" class="lbl lbl-b">Redis 缓存</text><text x="592" y="256" text-anchor="middle" class="lbl-s">命中 97% · 约 1 ms</text><use href="#i-db" x="690" y="198" width="44" height="44" class="u-ink"/><text x="712" y="192" text-anchor="middle" class="lbl lbl-b">MySQL</text><text x="712" y="256" text-anchor="middle" class="lbl-s">未命中 3% · 约 25 ms</text></svg>
+    </div>
+    <figcaption><b>大部分请求走不到最底层。</b>通道的宽度表示还剩多少请求。静态资源在浏览器和 CDN 就被挡掉了 96%；首页数据接口是每个学生各不相同的数据，每次都要进机房，但进了机房，余量查询也只有 3% 落到 MySQL。</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>余量服务没命中缓存时，先查 Redis 落空（约 <span class="num">1</span> ms），再查 MySQL（约 <span class="num">25</span> ms），然后把结果写回缓存。</p>
+    <p>再看今年的选课开放日：</p>
+    <ul class="facts">
+      <li><span class="num">8:52</span>，一次缓存集群扩容操作失误，<strong>余量缓存被全部清空</strong>。8:52～9:00 访问量很小，没人发现。</li>
+      <li><span class="num">9:00</span> 选课开放，余量查询约 <strong><span class="num">2.4</span> 万 QPS</strong>，余量缓存的命中率只有 <strong><span class="num">40%</span></strong>。</li>
+      <li>MySQL 两台从库合计能承担约 <strong><span class="num">6000</span> QPS</strong> 的余量查询。</li>
+      <li><span class="num">9:00～9:06</span>：余量服务 p50 <span class="num">1.4</span> s，首页 p50 <strong><span class="num">1.9</span> s</strong>，首页超时率 <span class="num">7%</span>。命中率随后逐步回升，9:10 回到 97%，一切恢复正常。</li>
+      <li>复盘还发现：同一门热门课的余量缓存失效时，同一秒内有上千个请求同时回源去查数据库里的同一行。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 316" role="img" aria-label="开放日 8:50 到 9:14 的两条曲线。上图：余量查询在 9:00 前约每秒一千次，9:00 跳到每秒 2.4 万次；一条虚线标出 MySQL 从库约每秒 6000 次的承载能力。下图：余量缓存在 8:52 被清空，9:00 时命中率只有 40%，之后逐分钟回升，9:10 回到平常的 97%。9:00 到 9:06 用红色阴影标出，这段时间首页 p50 为 1.9 秒，超时率 7%。"><rect x="354" y="30" width="162" height="266" class="shade"/><text x="435" y="86" text-anchor="middle" class="lbl-red lbl-b">9:00–9:06</text><text x="435" y="101" text-anchor="middle" class="lbl-red">首页 p50 1.9 s</text><text x="435" y="116" text-anchor="middle" class="lbl-red">超时率 7%</text><line x1="138" y1="22" x2="138" y2="296" class="ln-red dash"/><text x="142" y="18" text-anchor="start" class="lbl-red">8:52 余量缓存被清空</text><line x1="354" y1="22" x2="354" y2="296" class="ln-red dash"/><text x="350" y="18" text-anchor="end" class="lbl-red">9:00 选课开放</text><line x1="84" y1="150" x2="732" y2="150" class="grid"/><text x="78" y="154" text-anchor="end" class="lbl-m lbl-mono">0</text><line x1="84" y1="113.3" x2="732" y2="113.3" class="grid"/><text x="78" y="117.3" text-anchor="end" class="lbl-m lbl-mono">1 万</text><line x1="84" y1="76.7" x2="732" y2="76.7" class="grid"/><text x="78" y="80.7" text-anchor="end" class="lbl-m lbl-mono">2 万</text><line x1="84" y1="40" x2="732" y2="40" class="grid"/><text x="78" y="44" text-anchor="end" class="lbl-m lbl-mono">3 万</text><text x="10" y="34" class="lbl-m">QPS</text><polyline points="84,146.3 354,146.3 354,62 732,62" class="ln-acc-b"/><text x="728" y="54" text-anchor="end" class="lbl-acc">余量查询 2.4 万 QPS</text><line x1="84" y1="128" x2="732" y2="128" class="ln-amber dash"/><text x="526.8" y="122" class="lbl-amber">MySQL 从库承载 ≈ 6000 QPS</text><line x1="84" y1="286" x2="732" y2="286" class="grid"/><text x="78" y="290" text-anchor="end" class="lbl-m lbl-mono">0%</text><line x1="84" y1="236" x2="732" y2="236" class="grid"/><text x="78" y="240" text-anchor="end" class="lbl-m lbl-mono">50%</text><line x1="84" y1="186" x2="732" y2="186" class="grid"/><text x="78" y="190" text-anchor="end" class="lbl-m lbl-mono">100%</text><text x="10" y="176" class="lbl-m">缓存命中率</text><line x1="84" y1="189" x2="732" y2="189" class="ln-thin dash"/><rect x="138" y="186" width="216" height="100" class="hatch"/><text x="246" y="205" text-anchor="middle" class="lbl-m">平常高峰时 97%</text><text x="246" y="236" text-anchor="middle" class="lbl-m">访问量很小</text><polyline points="354,246 381,241 408,234 435,226 462,218 489,210 516,202 543,197 570,194 597,191 624,189 651,189 678,189 705,189 732,189" class="ln-acc"/><circle cx="354" cy="246" r="3.5" class="pt"/><circle cx="381" cy="241" r="3.5" class="pt"/><circle cx="408" cy="234" r="3.5" class="pt"/><circle cx="435" cy="226" r="3.5" class="pt"/><circle cx="462" cy="218" r="3.5" class="pt"/><circle cx="489" cy="210" r="3.5" class="pt"/><circle cx="516" cy="202" r="3.5" class="pt"/><circle cx="543" cy="197" r="3.5" class="pt"/><circle cx="570" cy="194" r="3.5" class="pt"/><circle cx="597" cy="191" r="3.5" class="pt"/><circle cx="624" cy="189" r="3.5" class="pt"/><text x="362" y="262" class="lbl-acc lbl-mono">40%</text><text x="624" y="207" text-anchor="middle" class="lbl-acc">9:10 恢复</text><line x1="84" y1="286" x2="84" y2="291" class="axis"/><text x="84" y="305" text-anchor="middle" class="lbl-m lbl-mono">8:50</text><line x1="219" y1="286" x2="219" y2="291" class="axis"/><text x="219" y="305" text-anchor="middle" class="lbl-m lbl-mono">8:55</text><line x1="354" y1="286" x2="354" y2="291" class="axis"/><text x="354" y="305" text-anchor="middle" class="lbl-m lbl-mono">9:00</text><line x1="489" y1="286" x2="489" y2="291" class="axis"/><text x="489" y="305" text-anchor="middle" class="lbl-m lbl-mono">9:05</text><line x1="624" y1="286" x2="624" y2="291" class="axis"/><text x="624" y="305" text-anchor="middle" class="lbl-m lbl-mono">9:10</text><line x1="732" y1="286" x2="732" y2="291" class="axis"/><text x="732" y="305" text-anchor="middle" class="lbl-m lbl-mono">9:14</text><line x1="84" y1="286" x2="732" y2="286" class="axis"/></svg>
+    </div>
+    <figcaption><b>开放日 8:50 到 9:14。</b>上图是余量查询的总量，橙色虚线是 MySQL 从库能承担的量；下图是余量缓存的命中率。两图之间差的那一步——每秒有多少查询落到了 MySQL——留给你们来算。</figcaption>
+  </figure>
+
+  <div class="prose"><p>事后主任问：</p></div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>教务处主任</span></div>
+    <div><p>"缓存不就是锦上添花吗？按你们的说法，没命中也就多花 25 毫秒。"</p><p>"怎么缓存一清空，首页就从 0.16 秒变成了 1.9 秒？"</p></div>
+  </blockquote>
+
+  <div class="question">
+    <span class="pill">问题 2</span>
+    <h3>为什么大部分请求"走不到底"？缓存什么时候会失效？</h3>
+    <ol type="a">
+      <li>首页 2.3 MB 静态资源中，有多大比例根本不进机房？<code>/api/home</code> 为什么不能也放到 CDN 上？</li>
+      <li>用"期望耗时 = 命中率 × 命中耗时 + 未命中率 × 未命中耗时"算出余量查询在命中率 97% 和 40% 时的期望耗时。算出来的差距，和首页实际慢了的 1.7 秒相比如何？请算出两种命中率下回源到 MySQL 的 QPS，与它的承载能力对比，用思考题 1 的排队直觉和 Little's Law 解释差距。复盘里"上千个请求同时回源同一行"又加剧了什么？</li>
+      <li>缓存让响应时间与"系统有多深"脱钩，前提是什么？它同时带来了哪些新的风险（至少两种）？针对这次的"命中率悬崖"，给出至少两项防范措施，并说明各自的代价。</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第三幕 ============ -->
+<section class="act" id="act3">
+  <div class="numeral" aria-hidden="true">3</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 3</span>
+    <h2>提交</h2>
+    <p class="leads">引出 <b>问题 3 · 学生到底在等什么</b></p>
+  </header>
+
+  <div class="prose"><p>三年前，选课提交是一个同步请求，所有事情做完才返回。现在，学生只等前面一段，其余的事交给 Kafka 的消费者去做。</p></div>
+
+  <div class="twocol">
+    <div class="tablewrap">
+      <table>
+        <caption>三年前 · 全部同步，p50</caption>
+        <thead><tr><th>步骤</th><th class="n">耗时</th></tr></thead>
+        <tbody>
+          <tr><td>校验（时间冲突、先修条件）</td><td class="n">40 ms</td></tr>
+          <tr><td>扣名额（MySQL 事务 + 行锁）</td><td class="n">60 ms</td></tr>
+          <tr><td>写选课记录</td><td class="n">20 ms</td></tr>
+          <tr><td>重新生成个人课表（含日历文件）</td><td class="n">150 ms</td></tr>
+          <tr><td>调用短信网关发送"选课成功"</td><td class="n">150 ms</td></tr>
+          <tr><td>写审计日志</td><td class="n">30 ms</td></tr>
+          <tr class="sum"><td>合计</td><td class="n">450 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <caption>现在 · 学生等待的部分，p50</caption>
+        <thead><tr><th>步骤</th><th class="n">耗时</th></tr></thead>
+        <tbody>
+          <tr><td>校验（先取课表，再并行做冲突检测与先修校验）</td><td class="n">32 ms</td></tr>
+          <tr><td>Redis 原子扣减名额（Lua 脚本）</td><td class="n">2 ms</td></tr>
+          <tr><td>写选课记录 + 写 Outbox 事件（同一个本地事务）</td><td class="n">20 ms</td></tr>
+          <tr><td>网关、序列化与返回</td><td class="n">6 ms</td></tr>
+          <tr class="sum"><td>合计</td><td class="n">60 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>现在 · 学生不等的部分（Kafka 消费者）</caption>
+      <thead><tr><th>工作</th><th class="n">处理耗时</th><th>完成时间</th></tr></thead>
+      <tbody>
+        <tr><td>重新生成个人课表与日历文件</td><td class="n">约 150 ms</td><td>平时 1 s 内</td></tr>
+        <tr><td>发送"选课成功"短信</td><td class="n">—</td><td>平时平均 1.5 s 到达手机；<span style="color:var(--red)">高峰最慢约 40 s</span></td></tr>
+        <tr><td>写审计日志、更新推荐特征</td><td class="n">约 30 ms</td><td>平时 1 s 内</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 334" role="img" aria-label="上面一行是三年前的同步提交：校验 40、扣名额 60、写记录 20、生成课表 150、发短信 150、审计 30 毫秒，学生一共等 450 毫秒。第二行是现在学生等待的部分，只有 60 毫秒，放大后依次是校验 32、扣减 2、写记录加 Outbox 20、返回 6 毫秒。之后事件进入 Kafka，由消费者在学生不等的时候重新生成课表、写审计日志、更新推荐特征和发送短信；短信平时平均 1.5 秒到达，高峰最慢约 40 秒。"><defs><marker id="f6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker></defs><text x="10" y="53" class="lbl lbl-b">三年前</text><text x="10" y="68" class="lbl-m">全部同步</text><rect x="150" y="40" width="42" height="30" class="seg-1" stroke-width="1"/><text x="171" y="60" text-anchor="middle" class="lbl-s">校验</text><rect x="192" y="40" width="63" height="30" class="seg-0" stroke-width="1"/><text x="223.5" y="60" text-anchor="middle" class="lbl-s">扣名额</text><rect x="255" y="40" width="21" height="30" class="seg-1" stroke-width="1"/><line x1="265.5" y1="40" x2="265.5" y2="32" class="ln-thin"/><text x="265.5" y="29" text-anchor="middle" class="lbl-m">写记录</text><rect x="276" y="40" width="157.5" height="30" class="seg-0" stroke-width="1"/><text x="354.8" y="60" text-anchor="middle" class="lbl-s">生成课表</text><rect x="433.5" y="40" width="157.5" height="30" class="seg-1" stroke-width="1"/><text x="512.2" y="60" text-anchor="middle" class="lbl-s">发短信</text><rect x="591" y="40" width="31.5" height="30" class="seg-0" stroke-width="1"/><line x1="606.8" y1="40" x2="606.8" y2="32" class="ln-thin"/><text x="606.8" y="29" text-anchor="middle" class="lbl-m">审计</text><use href="#i-person" x="632.5" y="38" width="22" height="28" class="u-amber"/><use href="#i-spin" x="658.5" y="44" width="18" height="18" class="u-amber"/><text x="680.5" y="60" class="lbl-amber">等 450 ms</text><line x1="150" y1="84" x2="675" y2="84" class="axis"/><line x1="150" y1="84" x2="150" y2="88" class="axis"/><text x="150" y="100" text-anchor="middle" class="lbl-m lbl-mono">0</text><line x1="255" y1="84" x2="255" y2="88" class="axis"/><text x="255" y="100" text-anchor="middle" class="lbl-m lbl-mono">100</text><line x1="360" y1="84" x2="360" y2="88" class="axis"/><text x="360" y="100" text-anchor="middle" class="lbl-m lbl-mono">200</text><line x1="465" y1="84" x2="465" y2="88" class="axis"/><text x="465" y="100" text-anchor="middle" class="lbl-m lbl-mono">300</text><line x1="570" y1="84" x2="570" y2="88" class="axis"/><text x="570" y="100" text-anchor="middle" class="lbl-m lbl-mono">400</text><line x1="675" y1="84" x2="675" y2="88" class="axis"/><text x="675" y="100" text-anchor="middle" class="lbl-m lbl-mono">500 ms</text><text x="10" y="133" class="lbl lbl-b">现在</text><text x="10" y="148" class="lbl-m">学生等待的部分</text><rect x="150" y="120" width="33.6" height="30" class="seg-acc" stroke-width="1"/><rect x="183.6" y="120" width="2.1" height="30" class="seg-r" stroke-width="1"/><rect x="185.7" y="120" width="21" height="30" class="seg-acc" stroke-width="1"/><rect x="206.7" y="120" width="6.3" height="30" class="seg-r" stroke-width="1"/><path d="M213 120L236 120M213 150L236 150" class="ln-thin dots"/><rect x="232" y="114" width="372" height="42" rx="4" class="chip"/><rect x="236" y="120" width="194.1" height="30" class="seg-acc" stroke-width="1"/><text x="333.1" y="140" text-anchor="middle" class="lbl-on">校验 32</text><rect x="430.1" y="120" width="12.1" height="30" class="seg-r" stroke-width="1"/><line x1="436.2" y1="150" x2="436.2" y2="164" class="ln-thin"/><text x="436.2" y="176" text-anchor="middle" class="lbl-m">扣减 2</text><rect x="442.3" y="120" width="121.3" height="30" class="seg-acc" stroke-width="1"/><text x="502.9" y="140" text-anchor="middle" class="lbl-on">写记录 + Outbox 20</text><rect x="563.6" y="120" width="36.4" height="30" class="seg-r" stroke-width="1"/><text x="581.8" y="140" text-anchor="middle" class="lbl-s">返回 6</text><text x="610" y="124" class="lbl-m">放大约 6 倍</text><use href="#i-check" x="612" y="130" width="20" height="20" class="u-acc"/><text x="636" y="145" class="lbl-acc">60 ms 拿到结果</text><line x1="213" y1="150" x2="213" y2="208" class="ln-thin dash" marker-end="url(#f6a)"/><use href="#i-queue" x="187" y="210" width="52" height="28" class="u-ink"/><text x="181" y="229" text-anchor="end" class="lbl-s">Kafka</text><text x="253" y="222" class="lbl-m">学生不等的部分 · 由消费者完成</text><text x="10" y="262" class="lbl-s">重新生成课表与日历文件</text><rect x="253" y="251" width="157.5" height="14" class="bar-amber"/><text x="418.5" y="262" class="lbl-m">处理约 150 ms · 平时 1 s 内完成</text><text x="10" y="288" class="lbl-s">写审计日志 · 更新推荐特征</text><rect x="253" y="277" width="31.5" height="14" class="bar-amber"/><text x="292.5" y="288" class="lbl-m">约 30 ms · 平时 1 s 内完成</text><text x="10" y="314" class="lbl-s">发送“选课成功”短信</text><rect x="253" y="303" width="190" height="14" class="bar-red"/><path d="M445 301l6 18M453 301l6 18" class="ln-red"/><text x="469" y="314" class="lbl-red">平时平均 1.5 s 到达 · 高峰最慢约 40 s</text></svg>
+    </div>
+    <figcaption><b>同一件事，学生等的部分从 450 ms 缩到 60 ms。</b>上面两行按同一刻度画出新旧两个提交流程；放大框里是现在的 60 ms。橙色和红色的横条是交给 Kafka 消费者的工作，学生不用等它们，但它们照样要做完。</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>其他相关的事实：</p>
+    <ul class="facts">
+      <li>短信网关限速<strong>每秒 <span class="num">200</span> 条</strong>。今年开放日 9:00 起的前 <span class="num">20</span> 秒内，有约 <strong><span class="num">1.2</span> 万次</strong>选课成功，平均每秒约 <span class="num">600</span> 次。</li>
+      <li>有学生反映："选课成功后马上点'我的课表'，新课没出现，刷新一下才有。"</li>
+      <li><strong>推荐</strong>：如果在请求时实时计算，单次约 <span class="num">800</span> ms，要扫描学生的历史成绩、培养方案和全部开课。现在每晚 2:00 用 <span class="num">8</span> 台机器离线算好全校 5 万名学生的推荐列表，约 <span class="num">2</span> 小时；首页只读取结果并过滤掉已满的课程，约 <span class="num">20</span> ms。学期中每天打开首页的学生约 <span class="num">1.5</span> 万人。</li>
+      <li><strong>AI 选课助手</strong>：首页上只显示一句预先生成的欢迎语和 3 个推荐问题（<span class="num">7</span> ms）。学生点开提问后才真正调用大模型：第一个字 <span class="num">0.6</span> s 出现，完整回答约 <span class="num">6</span> s，以流式逐字输出。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 192" role="img" aria-label="左边是一堆不断增多的短信，表示开放后前 20 秒平均每秒约 600 次选课成功；中间是一个漏斗形的短信网关，限速每秒 200 条；右边是学生的手机。气泡里问：第 20 秒选上的那位，短信要等多久？"><defs><marker id="f7a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker></defs><use href="#i-env" x="40" y="134" width="32" height="23" class="u-muted"/><use href="#i-env" x="74" y="134" width="32" height="23" class="u-muted"/><use href="#i-env" x="108" y="134" width="32" height="23" class="u-muted"/><use href="#i-env" x="142" y="134" width="32" height="23" class="u-muted"/><use href="#i-env" x="176" y="134" width="32" height="23" class="u-muted"/><use href="#i-env" x="57" y="112" width="32" height="23" class="u-muted"/><use href="#i-env" x="91" y="112" width="32" height="23" class="u-muted"/><use href="#i-env" x="125" y="112" width="32" height="23" class="u-muted"/><use href="#i-env" x="159" y="112" width="32" height="23" class="u-muted"/><use href="#i-env" x="74" y="90" width="32" height="23" class="u-amber"/><use href="#i-env" x="108" y="90" width="32" height="23" class="u-amber"/><use href="#i-env" x="142" y="90" width="32" height="23" class="u-amber"/><use href="#i-env" x="91" y="68" width="32" height="23" class="u-amber"/><use href="#i-env" x="125" y="68" width="32" height="23" class="u-amber"/><use href="#i-env" x="108" y="46" width="32" height="23" class="u-amber"/><text x="124" y="178" text-anchor="middle" class="lbl-s">开放后前 20 秒 · 平均每秒约 600 次选课成功</text><text x="124" y="30" text-anchor="middle" class="lbl-amber">排队的短信越来越多……</text><line x1="236" y1="112" x2="296" y2="112" class="ln" marker-end="url(#f7a)"/><use href="#i-gate" x="300" y="56" width="110" height="100" class="u-acc"/><text x="355" y="178" text-anchor="middle" class="lbl-s">短信网关 · 限速每秒 200 条</text><line x1="414" y1="112" x2="486" y2="112" class="ln" marker-end="url(#f7a)"/><use href="#i-phone" x="494" y="86" width="28" height="50" class="u-ink"/><use href="#i-phone" x="534" y="86" width="28" height="50" class="u-ink"/><use href="#i-phone" x="574" y="86" width="28" height="50" class="u-ink"/><text x="548" y="178" text-anchor="middle" class="lbl-s">学生的手机</text><path d="M620 66h120a6 6 0 0 1 6 6v44a6 6 0 0 1-6 6H654l-14 14v-14h-20a6 6 0 0 1-6-6V72a6 6 0 0 1 6-6z" class="chip-amber"/><text x="680" y="90" text-anchor="middle" class="lbl-amber">第 20 秒选上的那位，</text><text x="680" y="108" text-anchor="middle" class="lbl-amber lbl-b">短信要等多久？</text></svg>
+    </div>
+    <figcaption><b>开放日 9:00 的短信网关。</b>选课成功的速度是网关发送速度的 3 倍，多出来的短信只能排队。</figcaption>
+  </figure>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 240" role="img" aria-label="对数时间轴上的三行。选课：提交返回 60 毫秒，课表更新不超过 1 秒，短信平均 1.5 秒，短信最慢约 40 秒。AI 助手：第一个字 0.6 秒，完整回答 6 秒。推荐：首页读取 20 毫秒，原来的实时计算 800 毫秒已不用，但推荐结果最长是一天前算的。"><defs><marker id="f8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-amber"/></marker></defs><line x1="150" y1="26" x2="150" y2="214" class="grid"/><text x="150" y="231" text-anchor="middle" class="lbl-m lbl-mono">10 ms</text><line x1="290" y1="26" x2="290" y2="214" class="grid"/><text x="290" y="231" text-anchor="middle" class="lbl-m lbl-mono">100 ms</text><line x1="430" y1="26" x2="430" y2="214" class="grid"/><text x="430" y="231" text-anchor="middle" class="lbl-m lbl-mono">1 s</text><line x1="570" y1="26" x2="570" y2="214" class="grid"/><text x="570" y="231" text-anchor="middle" class="lbl-m lbl-mono">10 s</text><line x1="710" y1="26" x2="710" y2="214" class="grid"/><text x="710" y="231" text-anchor="middle" class="lbl-m lbl-mono">100 s</text><line x1="150" y1="214" x2="710" y2="214" class="axis"/><use href="#i-check" x="10" y="48" width="22" height="22" class="u-ink"/><text x="40" y="65" class="lbl lbl-b">选课</text><line x1="150" y1="60" x2="710" y2="60" class="ln-thin"/><use href="#i-spark" x="10" y="112" width="22" height="22" class="u-ink"/><text x="40" y="129" class="lbl lbl-b">AI 助手</text><line x1="150" y1="124" x2="710" y2="124" class="ln-thin"/><use href="#i-star" x="10" y="170" width="22" height="22" class="u-ink"/><text x="40" y="187" class="lbl lbl-b">推荐</text><line x1="150" y1="182" x2="710" y2="182" class="ln-thin"/><circle cx="258.9" cy="60" r="5.5" class="pt"/><text x="258.9" y="49" text-anchor="middle" class="lbl-acc">提交返回 60 ms</text><circle cx="430" cy="60" r="5.5" class="pt-2"/><text x="430" y="49" text-anchor="middle" class="lbl-s">课表更新 ≤ 1 s</text><circle cx="454.7" cy="60" r="5.5" class="pt-2"/><text x="454.7" y="80" text-anchor="middle" class="lbl-s">短信平均 1.5 s</text><circle cx="654.3" cy="60" r="5.5" class="pt-red"/><text x="654.3" y="49" text-anchor="middle" class="lbl-red">短信最慢 ≈ 40 s</text><circle cx="398.9" cy="124" r="5.5" class="pt"/><text x="398.9" y="113" text-anchor="middle" class="lbl-acc">第一个字 0.6 s</text><circle cx="538.9" cy="124" r="5.5" class="pt-2"/><text x="538.9" y="113" text-anchor="middle" class="lbl-s">完整回答 6 s</text><circle cx="192.1" cy="182" r="5.5" class="pt"/><text x="192.1" y="171" text-anchor="middle" class="lbl-acc">首页读取 20 ms</text><circle cx="416.4" cy="182" r="5.5" class="pt-ghost"/><text x="416.4" y="202" text-anchor="middle" class="lbl-m">实时计算 800 ms（已不用）</text><path d="M636.8 182h69.2" class="ln-amber" marker-end="url(#f8a)"/><text x="704" y="173" text-anchor="end" class="lbl-amber">结果最长是一天前算的 →</text></svg>
+    </div>
+    <figcaption><b>同一件事，有好几个"响应时间"。</b>三行分别是选课、AI 助手和推荐，横轴是对数刻度。蓝色实心点是学生"等到结果"的时刻，空心点是"事情真正做完"的时刻。</figcaption>
+  </figure>
+
+  <div class="prose"><p>小林又来问：</p></div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>实习生小林</span></div>
+    <div><p>"那现在'选一门课'到底要多久？60 毫秒，1.5 秒，还是 40 秒？"</p></div>
+  </blockquote>
+
+  <div class="question">
+    <span class="pill">问题 3</span>
+    <h3>哪些工作可以不让学生等？被移走的工作去了哪里？</h3>
+    <ol type="a">
+      <li>对照新旧两个提交流程，哪些步骤必须留在学生等待的路径上？你们的判据是什么？如果把"扣名额"也改成异步，先返回"已提交，请稍后查看结果"，学生体验和系统会发生什么变化？</li>
+      <li>被移出去的工作并没有消失。请用数据算出高峰时短信为什么最慢要等约 40 秒；解释"选课成功后课表里没有新课"的原因。为什么"写选课记录"和"写 Outbox 事件"要放在同一个本地事务里（L-03）？不这样做会出什么问题？</li>
+      <li>推荐从实时计算的 800 ms 变成读离线结果的 20 ms，付出了什么？AI 助手的流式输出改变了学生等待中的哪一段？最后回答小林：请为"选一门课"定义两个指标，一个衡量"学生等了多久"，一个衡量"事情做完了没有"，并给出你们建议的目标值。</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第四幕 ============ -->
+<section class="act" id="act4">
+  <div class="numeral" aria-hidden="true">4</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 4</span>
+    <h2>事故</h2>
+    <p class="leads">引出 <b>问题 4 · 中位数没变差，尾巴变长</b></p>
+  </header>
+
+  <div class="prose"><p>先看首页链路上 13 个下游服务各自的延迟（普通工作日）。单独看，每个服务都很健康。可首页的 p99 从三年前的 600 ms 涨到了 1.1 s，而 p50 反而降了。</p></div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>各下游服务的延迟 · 单位 ms</caption>
+      <thead><tr><th>服务</th><th class="n">p50</th><th class="n">p95</th><th class="n">p99</th></tr></thead>
+      <tbody>
+        <tr><td>用户</td><td class="n">4</td><td class="n">10</td><td class="n">30</td></tr>
+        <tr><td>课表</td><td class="n">9</td><td class="n">18</td><td class="n">60</td></tr>
+        <tr><td>选课（已选课程）</td><td class="n">6</td><td class="n">14</td><td class="n">45</td></tr>
+        <tr><td>余量</td><td class="n">2</td><td class="n">5</td><td class="n">25</td></tr>
+        <tr><td>公告</td><td class="n">2</td><td class="n">4</td><td class="n">20</td></tr>
+        <tr><td>通知</td><td class="n">3</td><td class="n">8</td><td class="n">30</td></tr>
+        <tr><td>评教</td><td class="n">6</td><td class="n">15</td><td class="n">50</td></tr>
+        <tr><td>推荐</td><td class="n">20</td><td class="n">45</td><td class="n">180</td></tr>
+        <tr><td>搜索</td><td class="n">4</td><td class="n">12</td><td class="n">40</td></tr>
+        <tr><td>AI 助手</td><td class="n">7</td><td class="n">20</td><td class="n">90</td></tr>
+        <tr><td>冲突检测</td><td class="n">16</td><td class="n">35</td><td class="n">120</td></tr>
+        <tr><td>先修校验</td><td class="n">10</td><td class="n">22</td><td class="n">80</td></tr>
+        <tr><td>审计（投递到 Kafka）</td><td class="n">1</td><td class="n">2</td><td class="n">8</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 280" role="img" aria-label="左边：网关同时调用 12 个服务，其中一台偶尔会慢 10 倍，网关要等全部返回；审计用虚线表示，不等待。右边：一条曲线表示同步扇出 N 个调用时，至少碰到一个慢调用的概率，随 N 增大而上升；N 等于 12 和 100 处各标了一个点，数值留给学生计算。"><defs><marker id="f9a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker></defs><use href="#i-lb" x="140" y="12" width="72" height="44" class="u-acc"/><text x="220" y="38" class="lbl-s">网关</text><line x1="176" y1="58" x2="25" y2="108" class="ln-thin"/><use href="#i-server" x="14" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="53" y2="108" class="ln-thin"/><use href="#i-server" x="42" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="81" y2="108" class="ln-thin"/><use href="#i-server" x="70" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="109" y2="108" class="ln-thin"/><use href="#i-server" x="98" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="137" y2="108" class="ln-thin"/><use href="#i-server" x="126" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="165" y2="108" class="ln-thin"/><use href="#i-server" x="154" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="193" y2="108" class="ln-thin"/><use href="#i-server" x="182" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="221" y2="108" class="ln-thin"/><use href="#i-server" x="210" y="110" width="22" height="30" class="u-red"/><line x1="176" y1="58" x2="249" y2="108" class="ln-thin"/><use href="#i-server" x="238" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="277" y2="108" class="ln-thin"/><use href="#i-server" x="266" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="305" y2="108" class="ln-thin"/><use href="#i-server" x="294" y="110" width="22" height="30" class="u-acc"/><line x1="176" y1="58" x2="333" y2="108" class="ln-thin"/><use href="#i-server" x="322" y="110" width="22" height="30" class="u-acc"/><use href="#i-clock" x="207" y="146" width="28" height="28" class="u-red"/><text x="221" y="190" text-anchor="middle" class="lbl-red">偶尔慢 10 倍</text><text x="176" y="214" text-anchor="middle" class="lbl-s">12 个同步调用 · 每个各有 1% 的请求慢于自己的 p99</text><text x="176" y="232" text-anchor="middle" class="lbl-s">首页要等它们全部返回</text><line x1="176" y1="58" x2="357" y2="112" class="ln-thin dash"/><use href="#i-server" x="348" y="114" width="18" height="26" class="u-ghost"/><text x="357" y="156" text-anchor="middle" class="lbl-m">审计</text><line x1="370" y1="14" x2="370" y2="270" class="grid"/><line x1="418" y1="236" x2="740" y2="236" class="grid"/><text x="412" y="240" text-anchor="end" class="lbl-m lbl-mono">0%</text><line x1="418" y1="186" x2="740" y2="186" class="grid"/><text x="412" y="190" text-anchor="end" class="lbl-m lbl-mono">25%</text><line x1="418" y1="136" x2="740" y2="136" class="grid"/><text x="412" y="140" text-anchor="end" class="lbl-m lbl-mono">50%</text><line x1="418" y1="86" x2="740" y2="86" class="grid"/><text x="412" y="90" text-anchor="end" class="lbl-m lbl-mono">75%</text><line x1="418" y1="36" x2="740" y2="36" class="grid"/><text x="412" y="40" text-anchor="end" class="lbl-m lbl-mono">100%</text><text x="418" y="253" text-anchor="middle" class="lbl-m lbl-mono">0</text><text x="498.5" y="253" text-anchor="middle" class="lbl-m lbl-mono">25</text><text x="579" y="253" text-anchor="middle" class="lbl-m lbl-mono">50</text><text x="659.5" y="253" text-anchor="middle" class="lbl-m lbl-mono">75</text><text x="740" y="253" text-anchor="middle" class="lbl-m lbl-mono">100</text><text x="579" y="270" text-anchor="middle" class="lbl-m">同步扇出的调用数 N</text><text x="388" y="24" class="lbl-m">至少碰到一个慢调用的概率</text><polyline points="418,236 421.2,234 424.4,232 427.7,230.1 430.9,228.1 434.1,226.2 437.3,224.3 440.5,222.4 443.8,220.5 447,218.7 450.2,216.9 453.4,215.1 456.6,213.3 459.9,211.5 463.1,209.7 466.3,208 469.5,206.3 472.7,204.6 476,202.9 479.2,201.2 482.4,199.6 485.6,197.9 488.8,196.3 492.1,194.7 495.3,193.1 498.5,191.6 501.7,190 504.9,188.5 508.2,186.9 511.4,185.4 514.6,183.9 517.8,182.5 521,181 524.3,179.5 527.5,178.1 530.7,176.7 533.9,175.3 537.1,173.9 540.4,172.5 543.6,171.1 546.8,169.8 550,168.5 553.2,167.1 556.5,165.8 559.7,164.5 562.9,163.2 566.1,162 569.3,160.7 572.6,159.5 575.8,158.2 579,157 582.2,155.8 585.4,154.6 588.7,153.4 591.9,152.2 595.1,151.1 598.3,149.9 601.5,148.8 604.8,147.7 608,146.5 611.2,145.4 614.4,144.3 617.6,143.3 620.9,142.2 624.1,141.1 627.3,140.1 630.5,139 633.7,138 637,137 640.2,136 643.4,135 646.6,134 649.8,133 653.1,132 656.3,131.1 659.5,130.1 662.7,129.2 665.9,128.2 669.2,127.3 672.4,126.4 675.6,125.5 678.8,124.6 682,123.7 685.3,122.8 688.5,122 691.7,121.1 694.9,120.3 698.1,119.4 701.4,118.6 704.6,117.8 707.8,116.9 711,116.1 714.2,115.3 717.5,114.5 720.7,113.8 723.9,113 727.1,112.2 730.3,111.4 733.6,110.7 736.8,109.9 740,109.2" class="ln-acc"/><circle cx="456.6" cy="213.3" r="5" class="pt"/><text x="466.6" y="231.3" text-anchor="start" class="lbl-acc lbl-b">N = 12 → ?</text><circle cx="740" cy="109.2" r="5" class="pt"/><text x="732" y="99.2" text-anchor="end" class="lbl-acc lbl-b">N = 100 → ?</text></svg>
+    </div>
+    <figcaption><b>扇出越多，越容易碰上一个慢的。</b>左边是首页的扇出：任何一个同步调用慢下来，整个首页都要陪着等。右边的曲线是"一次请求里至少碰到一个慢调用"的概率随扇出数 N 的变化；两个点的数值请你们自己算。</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>11 月的一个下午出了事故：</p>
+    <ul class="facts">
+      <li>前一晚的离线推荐作业失败，推荐服务自动切换到实时计算（单次约 <span class="num">800</span> ms），线程池很快被占满，响应时间涨到 <span class="num">3</span> s 以上。</li>
+      <li>网关调用推荐服务的超时是框架默认的 <strong><span class="num">5</span> s</strong>。</li>
+      <li>首页 p50 从 160 ms 涨到 <strong><span class="num">3.2</span> s</strong>，持续 <span class="num">25</span> 分钟。期间其他服务全部正常。</li>
+    </ul>
+    <p>事后团队做了两项改动：</p>
+    <ol style="margin:0;padding-left:1.4em;display:grid;gap:6px">
+      <li><strong>超时 + 降级</strong>：推荐调用超时设为 <span class="num">100</span> ms，超时或出错时返回缓存里的"本周热门课程"。平时约 <span class="num">2%</span> 的首页请求会触发这个降级。</li>
+      <li><strong>对冲请求</strong>：对课表服务和冲突检测服务，如果等了该服务的 p95 还没返回，就向另一个副本再发一次相同的请求，用先回来的结果。</li>
+    </ol>
+    <p>改动后首页 p99 从 1.1 s 降到 <strong><span class="num">450</span> ms</strong>，p50 不变；课表服务和冲突检测服务收到的请求量各增加了约 <span class="num">5%</span>。</p>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 280" role="img" aria-label="左边是事故时：网关同时调用课表、冲突检测和其他服务，它们都正常，只有推荐服务因线程池占满要 3 秒以上；网关要等所有调用返回，首页变成 3.2 秒。右边是改动后：推荐调用 100 毫秒超时，超时就降级为本周热门课程；课表服务启用对冲请求，等过 p95 还没返回就向副本 B 再发一次，用先回来的那份；首页 p99 降到 450 毫秒。"><defs><marker id="f10a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker><marker id="f10r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-red"/></marker></defs><text x="14" y="22" class="lbl-m lbl-mono">事故时 · 推荐调用超时 5 s</text><use href="#i-phone" x="18" y="112" width="28" height="50" class="u-red"/><use href="#i-spin" x="52" y="120" width="18" height="18" class="u-red"/><text x="32" y="182" text-anchor="middle" class="lbl-red lbl-b">首页 3.2 s</text><line x1="50" y1="146" x2="86" y2="146" class="ln" marker-end="url(#f10a)"/><use href="#i-lb" x="90" y="124" width="66" height="42" class="u-acc"/><text x="123" y="184" text-anchor="middle" class="lbl-s">网关</text><line x1="158" y1="145" x2="214" y2="58" class="ln-thin"/><use href="#i-server" x="216" y="44" width="20" height="28" class="u-acc"/><text x="244" y="62" class="lbl-s">课表 9 ms</text><line x1="158" y1="145" x2="214" y2="100" class="ln-thin"/><use href="#i-server" x="216" y="86" width="20" height="28" class="u-acc"/><text x="244" y="104" class="lbl-s">冲突检测 16 ms</text><line x1="158" y1="145" x2="214" y2="142" class="ln-thin"/><use href="#i-server" x="216" y="128" width="20" height="28" class="u-acc"/><text x="244" y="146" class="lbl-s">其他 9 个服务</text><line x1="158" y1="145" x2="214" y2="214" class="ln-red"/><use href="#i-server" x="216" y="200" width="20" height="28" class="u-red"/><use href="#i-clock" x="242" y="200" width="26" height="26" class="u-red"/><text x="274" y="212" class="lbl-red lbl-b">推荐 3 s+</text><text x="274" y="228" class="lbl-red">线程池占满</text><text x="190" y="262" text-anchor="middle" class="lbl-s">网关要等所有调用返回才组装首页</text><line x1="374" y1="14" x2="374" y2="272" class="grid"/><text x="392" y="22" class="lbl-m lbl-mono">改动后</text><use href="#i-phone" x="404" y="112" width="28" height="50" class="u-acc"/><text x="418" y="182" text-anchor="middle" class="lbl-acc lbl-b">p99 450 ms</text><line x1="434" y1="146" x2="456" y2="146" class="ln" marker-end="url(#f10a)"/><use href="#i-lb" x="460" y="124" width="66" height="42" class="u-acc"/><text x="493" y="184" text-anchor="middle" class="lbl-s">网关</text><line x1="528" y1="134" x2="640" y2="62" class="ln-red dash"/><use href="#i-server" x="646" y="44" width="20" height="28" class="u-ghost"/><text x="672" y="56" class="lbl-s">推荐</text><text x="672" y="72" class="lbl-red">100 ms 超时</text><g class="ln-red"><path d="M600 81l12 12M600 93l12 -12" stroke-width="2"/></g><rect x="548" y="102" width="150" height="24" rx="12" class="chip-amber"/><text x="623" y="118" text-anchor="middle" class="lbl-amber">降级：本周热门课程</text><line x1="528" y1="156" x2="640" y2="160" class="ln"/><use href="#i-server" x="646" y="146" width="20" height="28" class="u-acc"/><text x="672" y="158" class="lbl-s">课表 · 副本 A</text><line x1="528" y1="162" x2="640" y2="212" class="ln dash"/><use href="#i-server" x="646" y="198" width="20" height="28" class="u-acc"/><text x="672" y="210" class="lbl-s">课表 · 副本 B</text><text x="672" y="226" class="lbl-m">等过 p95 才发</text><text x="568" y="254" text-anchor="middle" class="lbl-s">对冲：两份请求，用先回来的那份</text></svg>
+    </div>
+    <figcaption><b>事故时和改动后。</b>左边：其他服务都在几毫秒内返回，网关却要等推荐的 3 秒。右边：推荐被 100 ms 的超时截断，换成一份缓存的热门课程；课表多发一份对冲请求，谁先回来用谁。</figcaption>
+  </figure>
+
+  <div class="prose"><p>主任问：</p></div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>教务处主任</span></div>
+    <div><p>"推荐只是个锦上添花的功能，凭什么它一坏，整个首页都打不开？"</p></div>
+  </blockquote>
+
+  <div class="question">
+    <span class="pill">问题 4</span>
+    <h3>中位数没变差，尾巴为什么变长了？</h3>
+    <ol type="a">
+      <li>从第一幕的链路图数出首页<strong>同步等待</strong>的下游调用有几个（审计算不算？）。假设每个调用相互独立，各有 1% 的概率慢于它自己的 p99，一次首页请求至少碰到一个这种慢调用的概率是多少？如果扇出到 100 个调用呢？据此解释为什么首页 p50 没有变差（反而降了），p99 却从 600 ms 涨到 1.1 s。</li>
+      <li>推荐服务的事故里，一个非关键模块为什么拖垮了整个首页？团队的两项改动各解决了什么、各付出了什么代价？推荐的超时如果改成 50 ms 或 300 ms 会怎样？为什么只对课表和冲突检测这两个服务做对冲？对冲为什么等到 p95 才发，多出的请求量为什么约是 5%？如果在 p50 就发呢？</li>
+      <li>"对冲"和"超时后重试"有什么区别？如果所有调用都配置了"失败就重试 3 次"，在第二幕 9:00 那种时刻会发生什么？</li>
+    </ol>
+    <p class="adv"><b>进阶 · 不计分</b>　(a) 的计算假设各调用"相互独立"。什么情况下这个假设不成立（例如同一台宿主机、同一个 Redis、同一次 GC 停顿）？此时 (a) 的结果是高估还是低估了首页的尾延迟？对冲请求还那么有效吗？</p>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第五幕 ============ -->
+<section class="act" id="act5">
+  <div class="numeral" aria-hidden="true">5</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 5</span>
+    <h2>评审</h2>
+    <p class="leads">引出 <b>问题 5 · 账记在哪儿了</b></p>
+  </header>
+
+  <div class="prose"><p>学期末，主任翻着三年来的账：</p></div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>三年来的组件清单</caption>
+      <thead><tr><th></th><th>三年前</th><th>现在</th></tr></thead>
+      <tbody>
+        <tr><td>入口</td><td>Nginx 主备</td><td>CDN + API 网关 ×3</td></tr>
+        <tr><td>应用</td><td>单体 Tomcat ×4</td><td>13 个服务，共 34 个实例</td></tr>
+        <tr><td>缓存</td><td>每台 Tomcat 的本地缓存</td><td>Redis 缓存集群 ×6 + 名额扣减 Redis ×3 + 各服务本地缓存</td></tr>
+        <tr><td>数据库</td><td>MySQL ×1</td><td>MySQL 一主两从</td></tr>
+        <tr><td>消息</td><td>—</td><td>Kafka ×3 + Outbox 投递程序（随选课服务部署）</td></tr>
+        <tr><td>文件存储</td><td>—</td><td>对象存储（按用量计费，不计台数）</td></tr>
+        <tr><td>搜索</td><td>—</td><td>Elasticsearch ×3</td></tr>
+        <tr><td>离线计算</td><td>—</td><td>8 台（每晚运行约 2 小时）</td></tr>
+        <tr><td>可观测</td><td>Nginx 访问日志</td><td>链路追踪 + 日志 + 指标平台 ×4</td></tr>
+        <tr><td>服务治理</td><td>—</td><td>注册中心 / 配置中心 ×3；超时、降级、对冲</td></tr>
+        <tr class="sum"><td>机器总数</td><td>7 台</td><td>约 70 台</td></tr>
+        <tr><td>告警规则</td><td>15 条</td><td>260 条</td></tr>
+        <tr><td>值班</td><td>1 人兼职</td><td>3 人轮值</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 268" role="img" aria-label="左边是三年前的 7 台机器：2 台 Nginx、4 台 Tomcat、1 台 MySQL。右边是现在约 70 台：13 个服务共 34 个实例、API 网关 3 台、Redis 9 台、MySQL 3 台、Kafka 3 台、Elasticsearch 3 台、离线计算 8 台、可观测 4 台、注册与配置中心 3 台。另有两个标签：告警规则从 15 条变成 260 条，值班从 1 人兼职变成 3 人轮值。"><text x="14" y="22" class="lbl-m lbl-mono">三年前 · 7 台</text><use href="#i-lb" x="20" y="50" width="46" height="30" class="u-acc"/><use href="#i-lb" x="72" y="50" width="46" height="30" class="u-acc"/><text x="69" y="96" text-anchor="middle" class="lbl-s">Nginx ×2</text><use href="#i-server" x="20" y="112" width="20" height="28" class="u-acc"/><use href="#i-server" x="46" y="112" width="20" height="28" class="u-acc"/><use href="#i-server" x="72" y="112" width="20" height="28" class="u-acc"/><use href="#i-server" x="98" y="112" width="20" height="28" class="u-acc"/><text x="69" y="156" text-anchor="middle" class="lbl-s">Tomcat ×4</text><use href="#i-db" x="54" y="168" width="30" height="30" class="u-ink"/><text x="69" y="214" text-anchor="middle" class="lbl-s">MySQL ×1</text><line x1="170" y1="14" x2="170" y2="270" class="grid"/><text x="188" y="22" class="lbl-m lbl-mono">现在 · 约 70 台</text><use href="#i-server" x="190" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="206" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="222" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="238" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="254" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="270" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="286" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="302" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="318" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="334" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="190" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="206" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="222" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="238" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="254" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="270" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="286" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="302" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="318" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="334" y="63" width="14" height="20" class="u-acc"/><use href="#i-server" x="190" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="206" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="222" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="238" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="254" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="270" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="286" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="302" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="318" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="334" y="86" width="14" height="20" class="u-acc"/><use href="#i-server" x="190" y="109" width="14" height="20" class="u-acc"/><use href="#i-server" x="206" y="109" width="14" height="20" class="u-acc"/><use href="#i-server" x="222" y="109" width="14" height="20" class="u-acc"/><use href="#i-server" x="238" y="109" width="14" height="20" class="u-acc"/><text x="190" y="144" class="lbl-s">13 个服务 · 34 个实例</text><use href="#i-server" x="370" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="386" y="40" width="14" height="20" class="u-acc"/><use href="#i-server" x="402" y="40" width="14" height="20" class="u-acc"/><text x="370" y="75" class="lbl-s">API 网关 ×3</text><use href="#i-server" x="440" y="40" width="14" height="20" class="u-amber"/><use href="#i-server" x="456" y="40" width="14" height="20" class="u-amber"/><use href="#i-server" x="472" y="40" width="14" height="20" class="u-amber"/><use href="#i-server" x="488" y="40" width="14" height="20" class="u-amber"/><use href="#i-server" x="504" y="40" width="14" height="20" class="u-amber"/><use href="#i-server" x="440" y="63" width="14" height="20" class="u-amber"/><use href="#i-server" x="456" y="63" width="14" height="20" class="u-amber"/><use href="#i-server" x="472" y="63" width="14" height="20" class="u-amber"/><use href="#i-server" x="488" y="63" width="14" height="20" class="u-amber"/><text x="440" y="98" class="lbl-s">Redis ×9</text><use href="#i-db" x="540" y="40" width="14" height="16" class="u-ink"/><use href="#i-db" x="556" y="40" width="14" height="16" class="u-ink"/><use href="#i-db" x="572" y="40" width="14" height="16" class="u-ink"/><text x="540" y="75" class="lbl-s">MySQL ×3</text><use href="#i-server" x="610" y="40" width="14" height="20" class="u-ink"/><use href="#i-server" x="626" y="40" width="14" height="20" class="u-ink"/><use href="#i-server" x="642" y="40" width="14" height="20" class="u-ink"/><text x="610" y="75" class="lbl-s">Kafka ×3</text><use href="#i-server" x="370" y="112" width="14" height="20" class="u-ink"/><use href="#i-server" x="386" y="112" width="14" height="20" class="u-ink"/><use href="#i-server" x="402" y="112" width="14" height="20" class="u-ink"/><text x="370" y="147" class="lbl-s">Elasticsearch ×3</text><use href="#i-server" x="480" y="112" width="14" height="20" class="u-muted"/><use href="#i-server" x="496" y="112" width="14" height="20" class="u-muted"/><use href="#i-server" x="512" y="112" width="14" height="20" class="u-muted"/><use href="#i-server" x="528" y="112" width="14" height="20" class="u-muted"/><use href="#i-server" x="544" y="112" width="14" height="20" class="u-muted"/><use href="#i-server" x="560" y="112" width="14" height="20" class="u-muted"/><use href="#i-server" x="576" y="112" width="14" height="20" class="u-muted"/><use href="#i-server" x="592" y="112" width="14" height="20" class="u-muted"/><text x="480" y="147" class="lbl-s">离线计算 ×8</text><use href="#i-server" x="620" y="112" width="14" height="20" class="u-ink"/><use href="#i-server" x="636" y="112" width="14" height="20" class="u-ink"/><use href="#i-server" x="652" y="112" width="14" height="20" class="u-ink"/><use href="#i-server" x="668" y="112" width="14" height="20" class="u-ink"/><text x="620" y="147" class="lbl-s">可观测 ×4</text><use href="#i-server" x="190" y="160" width="14" height="20" class="u-ink"/><use href="#i-server" x="206" y="160" width="14" height="20" class="u-ink"/><use href="#i-server" x="222" y="160" width="14" height="20" class="u-ink"/><text x="190" y="195" class="lbl-s">注册 / 配置中心 ×3</text><rect x="370" y="176" width="176" height="30" rx="15" class="chip"/><text x="386" y="196" class="lbl-s">告警规则 15 →</text><text x="530" y="196" text-anchor="end" class="lbl-amber lbl-b">260 条</text><rect x="556" y="176" width="190" height="30" rx="15" class="chip"/><text x="572" y="196" class="lbl-s">值班 1 人兼职 →</text><text x="730" y="196" text-anchor="end" class="lbl-amber lbl-b">3 人轮值</text><rect x="370" y="222" width="376" height="30" rx="15" class="chip"/><text x="386" y="242" class="lbl-m">CDN、对象存储按用量计费，不计入台数</text></svg>
+    </div>
+    <figcaption><b>7 台和 70 台。</b>每个小图标是一台机器，按用途分组。哪些是为功能加的，哪些是为响应时间加的，请你们来分。</figcaption>
+  </figure>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>教务处主任</span></div>
+    <div><p>"机器从 7 台变成 70 台，告警从 15 条变成 260 条，你们说响应时间没涨。"</p><p>"那多出来的这些，到底花在哪了？"</p></div>
+  </blockquote>
+
+  <div class="prose">
+    <p>同一周还有两件事摆在你们面前：</p>
+    <ul class="facts">
+      <li>选课开放首日，收到 <span class="num">37</span> 条投诉："页面显示还剩 3 个名额，点进去提交却提示已满。"余量展示读的是余量缓存（TTL <span class="num">3</span> 秒），名额扣减走的是 Redis 原子计数。</li>
+      <li>产品经理提了一个新需求："在首页最上方加一块'AI 今日选课建议'。每次打开首页时，实时调用课表、已选课程、余量、先修校验、冲突检测、评教 6 个服务汇总数据，再交给大模型生成 200 字左右的建议。大模型第一个字约 0.6 s 出现，完整生成约 4 s。希望它和首页其他内容一起出来。"大模型按调用计费，每次约 <span class="num">0.03</span> 元；学期中首页每天被打开约 <span class="num">4</span> 万次，来自约 <span class="num">1.5</span> 万名学生。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 318" role="img" aria-label="左边是首页的手机示意图：最上方是“AI 今日选课建议”，正在生成，约 4 秒；下面的我的课表、为你推荐、公告还是骨架屏。中间是每次打开首页都要实时调用的 6 个服务：课表、已选课程、余量、先修校验、冲突检测、评教，汇总后交给右边的大模型，第一个字约 0.6 秒，完整约 4 秒，每次约 0.03 元。右下角产品经理说：希望它和首页其他内容一起出来。首页每天被打开约 4 万次。"><defs><marker id="f12a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker></defs><rect x="30" y="10" width="196" height="300" rx="22" class="phone-body"/><rect x="42" y="34" width="172" height="254" rx="4" class="phone-screen"/><rect x="52" y="44" width="152" height="70" rx="6" class="chip-amber"/><use href="#i-spark" x="60" y="52" width="20" height="20" class="u-amber"/><text x="86" y="67" class="lbl lbl-b">AI 今日选课建议</text><use href="#i-spin" x="62" y="82" width="20" height="20" class="u-amber"/><text x="88" y="97" class="lbl-amber">生成中…约 4 s</text><rect x="52" y="126" width="152" height="42" rx="6" class="chip"/><text x="62" y="144" class="lbl-s">我的课表</text><rect x="62" y="152" width="110" height="6" rx="3" class="skel"/><rect x="52" y="178" width="152" height="42" rx="6" class="chip"/><text x="62" y="196" class="lbl-s">为你推荐</text><rect x="62" y="204" width="90" height="6" rx="3" class="skel"/><rect x="52" y="230" width="152" height="42" rx="6" class="chip"/><text x="62" y="248" class="lbl-s">公告</text><rect x="62" y="256" width="70" height="6" rx="3" class="skel"/><text x="128" y="302" text-anchor="middle" class="lbl-m">首页</text><path d="M206 80C250 80 250 42 292 42" class="ln-thin" marker-end="url(#f12a)"/><rect x="296" y="30" width="92" height="24" rx="4" class="chip-acc"/><text x="342" y="46" text-anchor="middle" class="lbl-s">课表</text><path d="M390 42C430 42 430 116 470 116" class="ln-thin"/><path d="M206 80C250 80 250 78 292 78" class="ln-thin" marker-end="url(#f12a)"/><rect x="296" y="66" width="92" height="24" rx="4" class="chip-acc"/><text x="342" y="82" text-anchor="middle" class="lbl-s">已选课程</text><path d="M390 78C430 78 430 116 470 116" class="ln-thin"/><path d="M206 80C250 80 250 114 292 114" class="ln-thin" marker-end="url(#f12a)"/><rect x="296" y="102" width="92" height="24" rx="4" class="chip-acc"/><text x="342" y="118" text-anchor="middle" class="lbl-s">余量</text><path d="M390 114C430 114 430 116 470 116" class="ln-thin"/><path d="M206 80C250 80 250 150 292 150" class="ln-thin" marker-end="url(#f12a)"/><rect x="296" y="138" width="92" height="24" rx="4" class="chip-acc"/><text x="342" y="154" text-anchor="middle" class="lbl-s">先修校验</text><path d="M390 150C430 150 430 116 470 116" class="ln-thin"/><path d="M206 80C250 80 250 186 292 186" class="ln-thin" marker-end="url(#f12a)"/><rect x="296" y="174" width="92" height="24" rx="4" class="chip-acc"/><text x="342" y="190" text-anchor="middle" class="lbl-s">冲突检测</text><path d="M390 186C430 186 430 116 470 116" class="ln-thin"/><path d="M206 80C250 80 250 222 292 222" class="ln-thin" marker-end="url(#f12a)"/><rect x="296" y="210" width="92" height="24" rx="4" class="chip-acc"/><text x="342" y="226" text-anchor="middle" class="lbl-s">评教</text><path d="M390 222C430 222 430 116 470 116" class="ln-thin"/><text x="342" y="254" text-anchor="middle" class="lbl-m">每次打开首页都实时调用</text><use href="#i-spark" x="474" y="88" width="56" height="56" class="u-acc"/><text x="540" y="108" class="lbl lbl-b">大模型</text><text x="540" y="126" class="lbl-s">第一个字约 0.6 s · 完整约 4 s</text><text x="540" y="142" class="lbl-s">每次约 0.03 元</text><use href="#i-person" x="470" y="200" width="30" height="38" class="u-ink"/><text x="485" y="254" text-anchor="middle" class="lbl-m">产品经理</text><path d="M530 188h200a6 6 0 0 1 6 6v40a6 6 0 0 1-6 6H530a6 6 0 0 1-6-6v-14l-14-6 14-6v-14a6 6 0 0 1 6-6z" class="chip"/><text x="630" y="210" text-anchor="middle" class="lbl-s">“希望它和首页其他内容</text><text x="630" y="228" text-anchor="middle" class="lbl-s">一起出来。”</text><text x="626" y="282" text-anchor="middle" class="lbl-m">学期中首页每天被打开约 4 万次</text></svg>
+    </div>
+    <figcaption><b>产品经理的提案。</b>每打开一次首页，就要实时调用 6 个服务，再等大模型写完一段话。请用你们的检查清单逐条评审它。</figcaption>
+  </figure>
+
+  <div class="question">
+    <span class="pill">问题 5</span>
+    <h3>响应时间没涨，账记在哪儿了？</h3>
+    <ol type="a">
+      <li>把上表"现在"一栏的组件逐一归类：主要为业务功能而加、主要为保住响应时间或吞吐而加、两者兼有。归类之后，你们怎么看"复杂度"和"低响应时间"之间的关系？</li>
+      <li>列一张账本：响应时间没涨，代价记在了哪里？至少覆盖一致性、尾延迟、资源成本、运维四项，每项用场景中的数据举证。其中"显示还剩 3 个、提交却已满"是 bug 还是设计取舍？请说明平台里哪些数据必须强一致、哪些允许过期，允许过期多久。</li>
+      <li>从前四题提炼一份不超过 6 条的"响应时间检查清单"，用它评审产品经理的提案：逐条指出问题，给出你们的改进方案，并估算改进前后每天的大模型调用费用。</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 作答要求 ============ -->
+<section class="block" id="req">
+  <div class="h-row"><span class="kicker">SUBMIT</span><h2>作答要求</h2></div>
+  <div class="prose">
+    <ol style="margin:0;padding-left:1.4em;display:grid;gap:8px">
+      <li>以小组为单位提交一份，五个问题都要作答，总篇幅建议 <span class="num">2500～3500</span> 字，可配图、表格和计算过程。文首列出小组成员（学号、姓名）。</li>
+      <li><strong>每个判断都要用场景中的数据或讲义中的概念支撑。</strong>不接受"微服务更快""加缓存就行""异步就是变快"这类没有机制、没有度量的表述。</li>
+      <li>允许查阅资料，须用自己的话写，文末列出参考来源。</li>
+      <li>文件命名：<code>Q-2-组号.md</code>。</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 评分 ============ -->
+<section class="block" id="rubric">
+  <div class="h-row"><span class="kicker">RUBRIC</span><h2>评分标准</h2><span class="kicker">满分 10 分 · 每题 2 分</span></div>
+  <div class="rubric">
+    <div class="score">2</div><div>判断准确；用了场景数据或做了计算；能指出成立条件或边界（"在……情况下成立，在……情况下不成立"）</div>
+    <div class="score s1">1</div><div>方向正确但停留在概念复述，没有用数据，或只讲一面</div>
+    <div class="score s0">0</div><div>未作答、明显错误，或与题目无关</div>
+  </div>
+  <p class="hard"><strong>硬性条件</strong>　第 1 题须算出关键路径长度和下游调用耗时之和；第 2 题须算出两种命中率下的期望耗时，并用回源 QPS 解释与实测的差距；第 3 题须算出短信最慢约 40 秒的来源；第 4 题须给出扇出概率的计算；第 5 题须给出检查清单，并用它评审新需求。缺任一项，该题最高 1 分。</p>
+</section>
+
+<!-- ============ 参考 ============ -->
+<section class="block" id="refs">
+  <div class="h-row"><span class="kicker">READING</span><h2>参考阅读</h2></div>
+  <ul class="refs">
+    <li>讲义：L-02（微服务的同步/异步通信、熔断与重试、可观测）、L-03（响应时间分解；Pull/Push；Saga、Outbox、CQRS；AI 应用的流式交互）、L-04（第二阶段缓存及其新问题；插曲·前端里的 CDN；数量级直觉）</li>
+    <li>思考题 1：排队与 Little's Law；串联与并联的可用性</li>
+    <li>J. Dean, L. A. Barroso, <a href="https://cacm.acm.org/research/the-tail-at-scale/">The Tail at Scale</a>, <em>Communications of the ACM</em>, 2013</li>
+    <li>Google SRE Book, Ch. 22 <a href="https://sre.google/sre-book/addressing-cascading-failures/">Addressing Cascading Failures</a></li>
+    <li>Chris Richardson, <a href="https://microservices.io/patterns/data/transactional-outbox.html">Pattern: Transactional outbox</a></li>
+    <li>M. Kleppmann, <em>Designing Data-Intensive Applications</em>, Ch. 1 "Describing Performance"（百分位数与尾延迟放大）</li>
+  </ul>
+</section>
+
+<footer>
+  <span>互联网产品开发与运维 · 2026 秋</span>
+  <span>思考题 2 · 14 个服务，160 毫秒</span>
+</footer>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,1092 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>一台 Nginx 引发的五个问题</title>
+<meta name="description" content="互联网产品开发与运维 · 思考题 1：以选课平台从单机到负载均衡的一学年为场景，引出关于负载均衡的五个问题。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EDF1F5;
+  --ink:#1B2530; --ink-2:#4A5866; --muted:#6B7885; --rule:#D8DEE5; --rule-strong:#B9C3CE;
+  --accent:#2251C9; --accent-ink:#1B41A3; --accent-soft:#E8EEFB;
+  --amber:#B8681A; --amber-soft:#FBF1E4;
+  --red:#C23B32; --red-soft:#FBE9E7;
+  --green:#2E8B57;
+  --serif:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1319; --surface:#151B23; --surface-2:#1B222C;
+    --ink:#E7ECF1; --ink-2:#B4BFCA; --muted:#8C98A4; --rule:#2B3541; --rule-strong:#3D4956;
+    --accent:#7FA3FF; --accent-ink:#A9C1FF; --accent-soft:#1B2740;
+    --amber:#E5A35A; --amber-soft:#2E2416;
+    --red:#F07A70; --red-soft:#3A1F1D;
+    --green:#5CC28A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1319; --surface:#151B23; --surface-2:#1B222C;
+  --ink:#E7ECF1; --ink-2:#B4BFCA; --muted:#8C98A4; --rule:#2B3541; --rule-strong:#3D4956;
+  --accent:#7FA3FF; --accent-ink:#A9C1FF; --accent-soft:#1B2740;
+  --amber:#E5A35A; --amber-soft:#2E2416;
+  --red:#F07A70; --red-soft:#3A1F1D;
+  --green:#5CC28A;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.75;
+  padding-inline:16px; padding-block:0 64px;
+}
+a{color:var(--accent-ink); text-decoration-color:var(--rule-strong); text-underline-offset:3px}
+a:hover{text-decoration-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+h1,h2,h3{font-family:var(--serif); font-weight:700; line-height:1.3; text-wrap:balance; margin:0}
+p{margin:0}
+strong{font-weight:600}
+code,.mono{font-family:var(--mono); font-size:.92em}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.sprite{position:absolute; width:0; height:0; overflow:hidden}
+
+.page{max-width:760px; margin:0 auto}
+
+/* ---------- header ---------- */
+.masthead{padding-block:40px 28px; border-bottom:1px solid var(--rule); display:grid; gap:20px}
+.eyebrow{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; color:var(--muted); font-size:13px; letter-spacing:.04em}
+.eyebrow .tag{font-family:var(--mono); font-size:12px; padding:2px 8px; border:1px solid var(--rule-strong); border-radius:3px; color:var(--ink-2)}
+.masthead h1{font-size:clamp(30px,6vw,44px); letter-spacing:.01em}
+.masthead .sub{color:var(--ink-2); font-size:17px; max-width:36em}
+.meta{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); margin:0}
+.meta div{background:var(--surface); padding:10px 14px}
+.meta dt{font-size:12px; color:var(--muted); letter-spacing:.06em}
+.meta dd{margin:2px 0 0; font-size:15px; font-weight:500}
+.meta dd .num{font-size:14px}
+
+.toc{display:flex; flex-wrap:wrap; gap:6px 4px; padding-block:14px; border-bottom:1px solid var(--rule); font-size:14px}
+.toc a{text-decoration:none; color:var(--ink-2); padding:3px 10px; border-radius:999px}
+.toc a:hover{background:var(--surface-2); color:var(--ink)}
+.toc a.q{color:var(--accent-ink)}
+
+/* ---------- prose ---------- */
+.prose{display:grid; gap:14px; max-width:42em}
+.prose ul{margin:0; padding-left:1.3em; display:grid; gap:6px}
+.lead{font-size:17px; color:var(--ink-2)}
+
+section.block{padding-block:40px; border-bottom:1px solid var(--rule); display:grid; gap:22px}
+section.block > h2{font-size:22px}
+.h-row{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap}
+.h-row .kicker{font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.08em}
+
+/* ---------- acts ---------- */
+.act{padding-block:44px; border-bottom:1px solid var(--rule); display:grid; grid-template-columns:72px 1fr; column-gap:20px}
+.act-body{display:grid; gap:22px; min-width:0}
+.act .numeral{font-family:var(--serif); font-weight:700; font-size:60px; line-height:1; color:var(--rule-strong); position:sticky; top:16px; align-self:start; padding-top:2px; font-variant-numeric:lining-nums}
+.act header{display:grid; gap:6px}
+.act header .kicker{font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.08em}
+.act header h2{font-size:26px}
+.act header .leads{font-size:14px; color:var(--muted)}
+.act header .leads b{color:var(--accent-ink); font-weight:500}
+@media (max-width:640px){
+  .act{grid-template-columns:1fr; row-gap:10px}
+  .act .numeral{position:static; font-size:40px; padding:0}
+}
+
+/* ---------- data tables ---------- */
+.tablewrap{overflow-x:auto; border:1px solid var(--rule); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:420px}
+caption{text-align:left; padding:10px 14px 8px; font-size:13px; color:var(--muted); caption-side:top; border-bottom:1px solid var(--rule)}
+th,td{padding:9px 14px; border-bottom:1px solid var(--rule); text-align:left; vertical-align:top}
+th{font-weight:500; color:var(--muted); font-size:13px; letter-spacing:.03em; background:var(--surface-2)}
+td:first-child,th:first-child{white-space:nowrap}
+td.n,th.n{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.bad{color:var(--red)}
+td.warn{color:var(--amber)}
+.sub-note{color:var(--muted); font-size:13px; font-family:var(--sans)}
+
+/* ---------- figures ---------- */
+figure{margin:0; display:grid; gap:10px}
+figure .fig{overflow-x:auto; background:var(--surface); border:1px solid var(--rule); padding:14px 12px}
+figure svg{display:block; width:100%; height:auto; max-width:100%; font-family:var(--sans); color:var(--ink)}
+figcaption{font-size:13.5px; color:var(--muted); line-height:1.6}
+figcaption b{color:var(--ink-2); font-weight:500}
+
+/* icon sprite styling — per-instance colors via custom properties on <use> */
+.ic-fill{fill:var(--ic-fill,var(--surface-2)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1.4; stroke-linejoin:round}
+.ic-slot{fill:var(--ic-slot,var(--surface)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1}
+.ic-screen{fill:var(--ic-screen,var(--surface)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1}
+.ic-stroke{fill:none; stroke:var(--ic-line,var(--ink-2)); stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round}
+.ic-stroke-b{fill:none; stroke:var(--ic-line,var(--ink-2)); stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round}
+.ic-dot{fill:var(--ic-line,var(--ink-2))}
+.ic-led{fill:var(--ic-led,var(--green))}
+.ic-led2{fill:var(--ic-line,var(--rule-strong)); opacity:.6}
+.u-acc{--ic-fill:var(--accent-soft); --ic-line:var(--accent)}
+.u-amber{--ic-fill:var(--amber-soft); --ic-line:var(--amber)}
+.u-red{--ic-fill:var(--red-soft); --ic-line:var(--red); --ic-led:var(--red)}
+.u-ghost{--ic-fill:var(--surface); --ic-line:var(--rule-strong); --ic-led:var(--rule-strong)}
+.u-ink{--ic-fill:var(--surface); --ic-line:var(--ink)}
+.u-muted{--ic-fill:var(--surface-2); --ic-line:var(--muted)}
+
+/* svg drawing classes */
+.box{fill:var(--surface); stroke:var(--ink-2); stroke-width:1.2}
+.box-bad{fill:var(--red-soft); stroke:var(--red); stroke-width:1.2}
+.chip{fill:var(--surface); stroke:var(--rule-strong); stroke-width:1}
+.ln{fill:none; stroke:var(--ink-2); stroke-width:1.2}
+.ln-thin{fill:none; stroke:var(--rule-strong); stroke-width:1}
+.ln-acc{fill:none; stroke:var(--accent); stroke-width:1.6}
+.ln-acc-b{fill:none; stroke:var(--accent); stroke-width:3}
+.ln-amber{fill:none; stroke:var(--amber); stroke-width:1.4}
+.ln-red{fill:none; stroke:var(--red); stroke-width:1.6}
+.dash{stroke-dasharray:5 4}
+.dots{stroke-dasharray:2 3}
+.grid{stroke:var(--rule); stroke-width:1}
+.axis{stroke:var(--rule-strong); stroke-width:1}
+.lbl{fill:var(--ink); font-size:12.5px}
+.lbl-s{fill:var(--ink-2); font-size:11px}
+.lbl-m{fill:var(--muted); font-size:11px}
+.lbl-acc{fill:var(--accent-ink); font-size:12px}
+.lbl-amber{fill:var(--amber); font-size:11.5px}
+.lbl-red{fill:var(--red); font-size:11.5px}
+.lbl-b{font-weight:600}
+.lbl-mono{font-family:var(--mono); font-size:11px}
+.mk-ink{fill:var(--ink-2)}
+.mk-acc{fill:var(--accent)}
+.mk-amber{fill:var(--amber)}
+.mk-red{fill:var(--red)}
+.pt{fill:var(--accent); stroke:var(--surface); stroke-width:1.5}
+.pt-2{fill:var(--surface); stroke:var(--accent); stroke-width:1.8}
+.pt-3{fill:var(--ink-2); stroke:var(--surface); stroke-width:1.5}
+.badge{fill:var(--amber)}
+.badge-t{fill:#fff; font-size:11px; font-weight:700}
+.evt-red{fill:var(--red)}
+.ground{stroke:var(--rule-strong); stroke-width:1.5; stroke-dasharray:1 5; stroke-linecap:round}
+
+/* ---------- director quote ---------- */
+.quote{display:grid; grid-template-columns:auto 1fr; gap:14px; padding:18px 20px; background:var(--surface); border:1px solid var(--rule); margin:0}
+.quote .who{display:grid; gap:6px; justify-items:center; align-content:start; padding-right:14px; border-right:1px solid var(--rule)}
+.quote .who svg{width:34px; height:42px; display:block}
+.quote .who span{font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:.04em; white-space:nowrap}
+.quote p{font-family:var(--serif); font-size:17.5px; line-height:1.8; color:var(--ink)}
+.quote p + p{margin-top:8px}
+
+/* ---------- observations ---------- */
+.obs{display:grid; gap:8px; padding:0; margin:0; list-style:none}
+.obs li{display:grid; grid-template-columns:26px 1fr; gap:10px; align-items:start; font-size:15px}
+.obs .n{width:22px; height:22px; border-radius:50%; background:var(--amber); color:#fff; font-family:var(--mono); font-size:12px; font-weight:700; display:grid; place-items:center; margin-top:3px}
+
+/* ---------- question card ---------- */
+.question{position:relative; background:var(--accent-soft); border:1px solid var(--accent); padding:26px 22px 22px; display:grid; gap:12px; margin-top:8px}
+.question .pill{position:absolute; top:-13px; left:16px; background:var(--accent); color:#fff; font-family:var(--mono); font-size:12px; letter-spacing:.06em; padding:3px 10px}
+.question h3{font-size:19px; color:var(--ink)}
+.question p, .question li{font-size:15.5px; line-height:1.75}
+.question ol{margin:0; padding-left:1.4em; display:grid; gap:6px}
+.question .adv{font-size:14px; color:var(--ink-2); border-top:1px dashed var(--rule-strong); padding-top:10px}
+.question .adv b{color:var(--muted); font-weight:500; font-family:var(--mono); font-size:12px; letter-spacing:.06em}
+
+/* ---------- rubric ---------- */
+.rubric{display:grid; grid-template-columns:auto 1fr; border:1px solid var(--rule); background:var(--surface)}
+.rubric > div{padding:12px 16px; border-bottom:1px solid var(--rule); font-size:15px}
+.rubric > div:nth-last-child(-n+2){border-bottom:none}
+.rubric .score{font-family:var(--mono); font-size:22px; font-weight:500; color:var(--accent-ink); border-right:1px solid var(--rule); display:grid; place-items:center; min-width:64px}
+.rubric .score.s1{color:var(--amber)} .rubric .score.s0{color:var(--muted)}
+.hard{padding:14px 18px; background:var(--amber-soft); border:1px solid var(--amber); font-size:14.5px}
+.refs{margin:0; padding-left:1.2em; display:grid; gap:8px; font-size:14.5px}
+.refs li{overflow-wrap:anywhere}
+
+footer{padding-block:28px; color:var(--muted); font-size:13px; display:flex; flex-wrap:wrap; gap:8px 20px}
+
+@media (prefers-reduced-motion: no-preference){
+  html{scroll-behavior:smooth}
+}
+
+/* ---------- print ---------- */
+@page{size:A4; margin:16mm 14mm}
+@media print{
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"]{
+    --ground:#FFFFFF; --surface:#FFFFFF; --surface-2:#F0F2F5;
+    --ink:#111820; --ink-2:#3A4654; --muted:#5C6773; --rule:#C9D0D8; --rule-strong:#9AA4AF;
+    --accent:#1F49B5; --accent-ink:#173A93; --accent-soft:#EDF1FB;
+    --amber:#A85E14; --amber-soft:#FBF3E8;
+    --red:#B4342C; --red-soft:#FBEDEB;
+    --green:#2E8B57;
+    color-scheme:light;
+  }
+  *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  html{scroll-behavior:auto}
+  body{padding:0; font-size:12.5pt; line-height:1.6}
+  .page{max-width:none}
+  .toc{display:none}
+  .masthead{padding-block:0 18px}
+  .masthead h1{font-size:26pt}
+  .masthead .sub{font-size:12pt}
+  section.block{padding-block:20px}
+  .act{padding-block:22px; grid-template-columns:48px 1fr; column-gap:14px}
+  .act header, .h-row, .masthead{break-after:avoid}
+  .prose p, .prose li{orphans:3; widows:3}
+  .act .numeral{position:static; font-size:34pt}
+  .act header h2{font-size:18pt}
+  .act-body{gap:14px}
+  figure, .question, .tablewrap, .quote, .rubric, .hard{break-inside:avoid}
+  figure .fig{padding:8px 6px; overflow:visible}
+  figcaption{font-size:9.5pt}
+  table{font-size:10.5pt; min-width:0}
+  th,td{padding:5px 8px}
+  .question{padding:18px 16px 16px}
+  .question p,.question li{font-size:11.5pt}
+  .quote p{font-size:12.5pt}
+  a{color:inherit; text-decoration:none}
+  .refs a[href^="http"]::after{content:" — " attr(href); font-family:var(--mono); font-size:9pt; color:var(--muted)}
+  footer{padding-block:12px; break-before:avoid}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ icon sprite ============ -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-server" viewBox="0 0 48 64">
+      <rect x="4" y="2" width="40" height="60" rx="4" class="ic-fill"/>
+      <rect x="10" y="10" width="28" height="8" rx="2" class="ic-slot"/>
+      <rect x="10" y="24" width="28" height="8" rx="2" class="ic-slot"/>
+      <rect x="10" y="38" width="28" height="8" rx="2" class="ic-slot"/>
+      <circle cx="14" cy="55" r="2.4" class="ic-led"/>
+      <circle cx="21" cy="55" r="2.4" class="ic-led2"/>
+    </symbol>
+    <symbol id="i-db" viewBox="0 0 64 64">
+      <path d="M10 14v36c0 5 10 9 22 9s22-4 22-9V14" class="ic-fill"/>
+      <ellipse cx="32" cy="14" rx="22" ry="8" class="ic-fill"/>
+      <path d="M10 26c0 5 10 9 22 9s22-4 22-9M10 38c0 5 10 9 22 9s22-4 22-9" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-laptop" viewBox="0 0 64 48">
+      <rect x="8" y="3" width="48" height="33" rx="3" class="ic-fill"/>
+      <rect x="12" y="7" width="40" height="25" rx="1.5" class="ic-screen"/>
+      <rect x="14" y="9.5" width="36" height="4" rx="1" class="ic-slot"/>
+      <path d="M2 40h60l-3 5H5z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-phone" viewBox="0 0 32 56">
+      <rect x="3" y="2" width="26" height="52" rx="5" class="ic-fill"/>
+      <rect x="6" y="8" width="20" height="38" rx="1.5" class="ic-screen"/>
+      <circle cx="16" cy="50" r="2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-person" viewBox="0 0 32 40">
+      <circle cx="16" cy="9" r="7" class="ic-fill"/>
+      <path d="M3 39c0-10 6-17 13-17s13 7 13 17z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-crowd" viewBox="0 0 64 44">
+      <use href="#i-person" x="0" y="6" width="26" height="32"/>
+      <use href="#i-person" x="38" y="6" width="26" height="32"/>
+      <use href="#i-person" x="17" y="0" width="30" height="38"/>
+    </symbol>
+    <symbol id="i-lb" viewBox="0 0 64 48">
+      <rect x="2" y="4" width="60" height="40" rx="6" class="ic-fill"/>
+      <path d="M12 24h14M26 24l14-10h12M26 24h26M26 24l14 10h12" class="ic-stroke"/>
+      <circle cx="12" cy="24" r="3" class="ic-dot"/>
+      <circle cx="53" cy="14" r="2.5" class="ic-dot"/><circle cx="53" cy="24" r="2.5" class="ic-dot"/><circle cx="53" cy="34" r="2.5" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="20" class="ic-fill"/>
+      <path d="M24 24V10M24 24H12" class="ic-stroke-b"/>
+      <circle cx="24" cy="24" r="2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 40 48">
+      <path d="M11 20v-7a9 9 0 0 1 18 0v7" class="ic-stroke-b"/>
+      <rect x="5" y="20" width="30" height="24" rx="4" class="ic-fill"/>
+      <circle cx="20" cy="30" r="3" class="ic-dot"/><path d="M20 32v6" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-log" viewBox="0 0 40 48">
+      <path d="M6 4h20l8 8v32H6z" class="ic-fill"/>
+      <path d="M26 4v8h8" class="ic-stroke"/>
+      <path d="M12 21h16M12 28h16M12 35h10" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-pulse" viewBox="0 0 64 32">
+      <path d="M2 18h12l6-12 8 22 8-16 4 6h22" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-gauge" viewBox="0 0 48 32">
+      <path d="M4 28a20 20 0 0 1 40 0" class="ic-stroke"/>
+      <path d="M24 28L34 12" class="ic-stroke-b"/>
+      <circle cx="24" cy="28" r="3" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-warn" viewBox="0 0 48 44">
+      <path d="M24 3L46 41H2z" class="ic-fill"/>
+      <path d="M24 16v13" class="ic-stroke-b"/><circle cx="24" cy="35" r="2.2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-spin" viewBox="0 0 32 32">
+      <path d="M16 3A13 13 0 1 1 3 16" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-wrench" viewBox="0 0 40 40">
+      <path d="M27 4a9 9 0 0 0-9 12L5 29a3 3 0 0 0 4 4l13-13a9 9 0 0 0 12-9l-5 5-5-1-1-5z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-power" viewBox="0 0 32 32">
+      <path d="M10 9a10 10 0 1 0 12 0" class="ic-stroke-b"/><path d="M16 3v12" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-bubble" viewBox="0 0 48 40">
+      <path d="M4 4h40v24H18l-8 8v-8H4z" class="ic-fill"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="page">
+
+<header class="masthead">
+  <div class="eyebrow">
+    <span>互联网产品开发与运维 · 2026 秋</span>
+    <span class="tag">思考题 1</span>
+    <span class="tag">M1 · 总评 10%</span>
+  </div>
+  <h1>一台 Nginx 引发的五个问题</h1>
+  <p class="sub">一所高校的选课平台从"单机"走到"负载均衡"的一学年。请把你们小组当作这个平台的运维团队：每一幕结束时，教务处主任都会问你们一个问题，你们要用这一幕的数据回答他。</p>
+  <dl class="meta">
+    <div><dt>发布</dt><dd><span class="num">2026-09-29</span> 周二</dd></div>
+    <div><dt>截止</dt><dd><span class="num">2026-10-09</span> 周五 <span class="num">23:59</span></dd></div>
+    <div><dt>形式</dt><dd>小组完成 · Markdown</dd></div>
+    <div><dt>提交</dt><dd>课上说明</dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <a href="#bg">背景</a>
+  <a href="#act1">一 · 方案</a>
+  <a href="#act2">二 · 压测</a>
+  <a href="#act3">三 · 日常</a>
+  <a href="#act4">四 · 故障</a>
+  <a href="#act5">五 · 上限</a>
+  <a href="#req" class="q">作答要求</a>
+  <a href="#rubric" class="q">评分</a>
+  <a href="#refs" class="q">参考</a>
+</nav>
+
+<!-- ============ 背景 ============ -->
+<section class="block" id="bg">
+  <div class="h-row"><span class="kicker">SCENE 0</span><h2>背景</h2></div>
+  <div class="prose">
+    <p class="lead">所有数字来自压测和监控，已做简化，量级可以当真。</p>
+    <ul>
+      <li>全校 <span class="num">2</span> 万名学生。选课平台是一台应用服务器（Tomcat）加一台数据库（MySQL），也就是 L-04 里的第一阶段。</li>
+      <li>主要接口两个：<strong>课程列表 / 余量查询</strong>（读，走本地缓存 Caffeine，TTL <span class="num">5</span> 秒，未命中则查数据库）和<strong>选课提交</strong>（写，扣减课程余量，数据库事务）。</li>
+      <li>去年选课开放的那个早上 <span class="num">9:00</span>，前 <span class="num">10</span> 分钟有 <span class="num">1.2</span> 万人同时在线，平均每人每 <span class="num">5</span> 秒刷新一次余量，查询流量约 <span class="num">2400</span> QPS。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 640 270" role="img" aria-label="去年选课开放的场景：早上九点，一万两千名学生在手机和电脑上刷新余量，页面转圈、投诉不断；两千四百 QPS 的查询全部打到唯一一台 Tomcat 上，缓存未命中的请求再回源到唯一一台 MySQL。">
+        <defs>
+          <marker id="a0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker>
+          <marker id="a0b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-acc"/></marker>
+        </defs>
+        <use href="#i-clock" x="22" y="14" width="40" height="40" class="u-ink"/>
+        <text x="70" y="40" class="lbl lbl-b">9:00 · 选课开放</text>
+        <use href="#i-bubble" x="188" y="24" width="54" height="44" class="u-amber"/>
+        <text x="215" y="47" text-anchor="middle" class="lbl-amber lbl-b">投诉</text>
+        <use href="#i-crowd" x="18" y="76" width="64" height="44" class="u-muted"/>
+        <use href="#i-crowd" x="86" y="76" width="64" height="44" class="u-muted"/>
+        <use href="#i-crowd" x="154" y="76" width="64" height="44" class="u-muted"/>
+        <use href="#i-crowd" x="52" y="116" width="64" height="44" class="u-muted"/>
+        <use href="#i-crowd" x="120" y="116" width="64" height="44" class="u-muted"/>
+        <use href="#i-laptop" x="26" y="168" width="64" height="48" class="u-ink"/>
+        <use href="#i-phone" x="104" y="166" width="28" height="50" class="u-ink"/>
+        <use href="#i-spin" x="146" y="176" width="26" height="26" class="u-amber"/>
+        <text x="178" y="194" class="lbl-amber">转圈…</text>
+        <text x="120" y="244" text-anchor="middle" class="lbl-s">1.2 万人同时在线 · 每 5 秒刷新一次余量</text>
+        <line x1="14" y1="222" x2="226" y2="222" class="ground"/>
+        <line x1="236" y1="100" x2="318" y2="134" class="ln-thin"/>
+        <line x1="236" y1="118" x2="318" y2="134" class="ln-thin"/>
+        <line x1="236" y1="136" x2="318" y2="134" class="ln-thin"/>
+        <line x1="236" y1="154" x2="318" y2="134" class="ln-thin"/>
+        <line x1="236" y1="172" x2="318" y2="134" class="ln-thin"/>
+        <line x1="318" y1="134" x2="352" y2="134" class="ln-acc-b" marker-end="url(#a0b)"/>
+        <text x="300" y="92" text-anchor="middle" class="lbl-acc lbl-b">≈ 2400 QPS</text>
+        <use href="#i-server" x="360" y="90" width="60" height="80" class="u-acc"/>
+        <text x="390" y="192" text-anchor="middle" class="lbl lbl-b">Tomcat ×1</text>
+        <rect x="338" y="200" width="104" height="22" rx="11" class="chip"/>
+        <text x="390" y="215" text-anchor="middle" class="lbl-m">本地缓存 · TTL 5 s</text>
+        <line x1="424" y1="130" x2="508" y2="130" class="ln" marker-end="url(#a0)"/>
+        <text x="466" y="120" text-anchor="middle" class="lbl-m">未命中 → 回源</text>
+        <use href="#i-db" x="514" y="92" width="72" height="72" class="u-ink"/>
+        <text x="550" y="192" text-anchor="middle" class="lbl lbl-b">MySQL ×1</text>
+        <line x1="330" y1="222" x2="620" y2="222" class="ground"/>
+        <text x="475" y="244" text-anchor="middle" class="lbl-s">一台应用服务器 · 一台数据库</text>
+      </svg>
+    </div>
+    <figcaption><b>去年 9:00 的现场。</b>一万多人同时刷新余量，所有请求打到唯一一台 Tomcat；本地缓存每 5 秒失效一次，失效时再回源到唯一一台 MySQL。学生看到的是转圈，教务处收到的是投诉。</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <caption>单机压测 · 查询接口</caption>
+      <thead><tr><th class="n">负载</th><th class="n">p50</th><th class="n">p95</th><th class="n">错误率</th></tr></thead>
+      <tbody>
+        <tr><td class="n">800 QPS</td><td class="n">20 ms</td><td class="n">150 ms</td><td class="n">0</td></tr>
+        <tr><td class="n">1200 QPS</td><td class="n">400 ms</td><td class="n warn">1.8 s</td><td class="n">0.5%（超时）</td></tr>
+        <tr><td class="n">1500 QPS</td><td class="n bad">2.1 s</td><td class="n bad">4.8 s</td><td class="n bad">9%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 560 290" role="img" aria-label="单机 p95 随负载的变化：800 QPS 时 150 毫秒，1200 QPS 时 1.8 秒，1500 QPS 时 4.8 秒；去年高峰需求 2400 QPS 远在右侧，教务处要求 p95 不超过 2 秒。">
+        <line x1="70" y1="240" x2="520" y2="240" class="axis"/>
+        <line x1="70" y1="30" x2="70" y2="240" class="axis"/>
+        <line x1="70" y1="198" x2="520" y2="198" class="grid"/>
+        <line x1="70" y1="156" x2="520" y2="156" class="grid"/>
+        <line x1="70" y1="114" x2="520" y2="114" class="grid"/>
+        <line x1="70" y1="72" x2="520" y2="72" class="grid"/>
+        <line x1="70" y1="30" x2="520" y2="30" class="grid"/>
+        <text x="62" y="244" text-anchor="end" class="lbl-m lbl-mono">0</text>
+        <text x="62" y="202" text-anchor="end" class="lbl-m lbl-mono">1 s</text>
+        <text x="62" y="160" text-anchor="end" class="lbl-m lbl-mono">2 s</text>
+        <text x="62" y="118" text-anchor="end" class="lbl-m lbl-mono">3 s</text>
+        <text x="62" y="76" text-anchor="end" class="lbl-m lbl-mono">4 s</text>
+        <text x="62" y="34" text-anchor="end" class="lbl-m lbl-mono">5 s</text>
+        <text x="70" y="260" text-anchor="middle" class="lbl-m lbl-mono">0</text>
+        <text x="208.5" y="260" text-anchor="middle" class="lbl-m lbl-mono">800</text>
+        <text x="277.7" y="260" text-anchor="middle" class="lbl-m lbl-mono">1200</text>
+        <text x="329.6" y="260" text-anchor="middle" class="lbl-m lbl-mono">1500</text>
+        <text x="485.4" y="260" text-anchor="middle" class="lbl-m lbl-mono">2400</text>
+        <text x="295" y="282" text-anchor="middle" class="lbl-m">查询负载 · QPS</text>
+        <line x1="70" y1="156" x2="520" y2="156" class="ln-amber dash"/>
+        <text x="76" y="150" class="lbl-amber">教务处要求 p95 ≤ 2 s</text>
+        <line x1="485.4" y1="30" x2="485.4" y2="240" class="ln-red dash"/>
+        <text x="480" y="228" text-anchor="end" class="lbl-red">去年高峰 2400 QPS</text>
+        <use href="#i-crowd" x="452" y="44" width="30" height="20" class="u-red"/>
+        <polyline points="208.5,239.2 277.7,223.2 329.6,151.8" class="ln-thin"/>
+        <circle cx="208.5" cy="239.2" r="3.5" class="pt-3"/>
+        <circle cx="277.7" cy="223.2" r="3.5" class="pt-3"/>
+        <circle cx="329.6" cy="151.8" r="3.5" class="pt-3"/>
+        <text x="342" y="156" class="lbl-s">p50 2.1 s</text>
+        <polyline points="208.5,233.7 277.7,164.4 329.6,38.4" class="ln-acc"/>
+        <circle cx="208.5" cy="233.7" r="5" class="pt"/>
+        <circle cx="277.7" cy="164.4" r="5" class="pt"/>
+        <circle cx="329.6" cy="38.4" r="5" class="pt"/>
+        <text x="200" y="224" text-anchor="end" class="lbl-acc">p95 150 ms</text>
+        <text x="266" y="178" text-anchor="end" class="lbl-acc">p95 1.8 s</text>
+        <text x="342" y="42" class="lbl-acc">p95 4.8 s · 错误率 9%</text>
+      </svg>
+    </div>
+    <figcaption><b>单机的响应时间不是线性变慢的。</b>从 800 到 1200 QPS，p95 涨了十倍；再加 300 QPS 就开始超时。去年 2400 QPS 的高峰在图的最右边，单机根本到不了那里。</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>结果是页面转圈、超时、大量投诉。教务处今年的要求：<strong>开放后 10 分钟内，查询 p95 ≤ 2 秒，系统不宕机。</strong></p>
+  </div>
+</section>
+
+<!-- ============ 第一幕 ============ -->
+<section class="act" id="act1">
+  <div class="numeral" aria-hidden="true">1</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 1</span>
+    <h2>方案</h2>
+    <p class="leads">引出 <b>问题 1 · 收益与代价</b></p>
+  </header>
+
+  <div class="prose">
+    <p>你们的方案：应用服务器从 1 台加到 4 台，前面加 1 台 Nginx 做七层负载均衡（轮询）。预算申请交上去，主任问：</p>
+  </div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>教务处主任</span></div>
+    <div>
+      <p>"去年一台机器也能跑，现在要 5 台。多花的这笔钱，我们到底买到了什么？另外你们运维多了哪些要操心的事？"</p>
+      <p>"我不要听'性能更好'，请一条一条说。"</p>
+    </div>
+  </blockquote>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 375" role="img" aria-label="左侧是去年的单机架构：浏览器、一台 Tomcat、一台 MySQL 串成一列。右侧是今年的架构：浏览器请求 Nginx，Nginx 轮询分发到四台 Tomcat，四台 Tomcat 各自回源 MySQL。三处标注了新出现的问题：Session 落在哪台、缓存各自回源、日志分散。">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker>
+          <marker id="a1amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-amber"/></marker>
+        </defs>
+        <text x="20" y="22" class="lbl-m lbl-mono">去年 · 单机</text>
+        <use href="#i-laptop" x="85" y="32" width="60" height="45" class="u-ink"/>
+        <text x="115" y="94" text-anchor="middle" class="lbl">浏览器</text>
+        <line x1="115" y1="100" x2="115" y2="114" class="ln" marker-end="url(#a1)"/>
+        <use href="#i-server" x="95" y="116" width="40" height="54" class="u-acc"/>
+        <text x="115" y="186" text-anchor="middle" class="lbl">Tomcat</text>
+        <text x="115" y="200" text-anchor="middle" class="lbl-m">Session · 缓存 · 日志</text>
+        <line x1="115" y1="206" x2="115" y2="236" class="ln" marker-end="url(#a1)"/>
+        <text x="124" y="225" class="lbl-m">回源 ×1</text>
+        <use href="#i-db" x="87" y="238" width="56" height="56" class="u-ink"/>
+        <text x="115" y="312" text-anchor="middle" class="lbl">MySQL</text>
+        <line x1="250" y1="20" x2="250" y2="350" class="grid"/>
+        <text x="290" y="22" class="lbl-m lbl-mono">今年 · 4 台 + Nginx</text>
+        <use href="#i-laptop" x="490" y="22" width="50" height="38" class="u-ink"/>
+        <text x="515" y="74" text-anchor="middle" class="lbl">浏览器</text>
+        <line x1="515" y1="78" x2="515" y2="92" class="ln" marker-end="url(#a1)"/>
+        <use href="#i-lb" x="475" y="94" width="80" height="50" class="u-acc"/>
+        <text x="564" y="116" class="lbl lbl-b">Nginx</text>
+        <text x="564" y="131" class="lbl-s">七层 · 轮询</text>
+        <line x1="515" y1="146" x2="335" y2="184" class="ln" marker-end="url(#a1)"/>
+        <line x1="515" y1="146" x2="455" y2="184" class="ln" marker-end="url(#a1)"/>
+        <line x1="515" y1="146" x2="575" y2="184" class="ln" marker-end="url(#a1)"/>
+        <line x1="515" y1="146" x2="695" y2="184" class="ln" marker-end="url(#a1)"/>
+        <text x="628" y="158" class="lbl-m">各 25%</text>
+        <use href="#i-server" x="315" y="186" width="40" height="54" class="u-acc"/>
+        <use href="#i-server" x="435" y="186" width="40" height="54" class="u-acc"/>
+        <use href="#i-server" x="555" y="186" width="40" height="54" class="u-acc"/>
+        <use href="#i-server" x="675" y="186" width="40" height="54" class="u-acc"/>
+        <text x="335" y="256" text-anchor="middle" class="lbl">Tomcat 1</text>
+        <text x="455" y="256" text-anchor="middle" class="lbl">Tomcat 2</text>
+        <text x="575" y="256" text-anchor="middle" class="lbl">Tomcat 3</text>
+        <text x="695" y="256" text-anchor="middle" class="lbl">Tomcat 4</text>
+        <line x1="335" y1="262" x2="497" y2="292" class="ln-amber" marker-end="url(#a1amber)"/>
+        <line x1="455" y1="262" x2="507" y2="292" class="ln-amber" marker-end="url(#a1amber)"/>
+        <line x1="575" y1="262" x2="523" y2="292" class="ln-amber" marker-end="url(#a1amber)"/>
+        <line x1="695" y1="262" x2="533" y2="292" class="ln-amber" marker-end="url(#a1amber)"/>
+        <use href="#i-db" x="487" y="294" width="56" height="56" class="u-ink"/>
+        <text x="515" y="368" text-anchor="middle" class="lbl">MySQL</text>
+        <circle cx="300" cy="178" r="10" class="badge"/><text x="300" y="182" text-anchor="middle" class="badge-t">1</text>
+        <text x="262" y="292" class="lbl-amber">Session 在哪台？</text>
+        <circle cx="640" cy="300" r="10" class="badge"/><text x="640" y="304" text-anchor="middle" class="badge-t">2</text>
+        <text x="654" y="304" class="lbl-amber">回源 ×4</text>
+        <circle cx="640" cy="342" r="10" class="badge"/><text x="640" y="346" text-anchor="middle" class="badge-t">3</text>
+        <text x="654" y="346" class="lbl-amber">日志散在 4 台</text>
+      </svg>
+    </div>
+    <figcaption><b>一层 Nginx 换来了 4 台并行，也换来了三处橙色标注。</b>①学生的登录状态原本只在一台机器上；②每台 Tomcat 各有一份本地缓存，各自回源；③出错的那台机器要在 4 份日志里找。</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>上线两周后，陆续冒出了几件事，请一并考虑：</p>
+    <ul class="obs">
+      <li><span class="n">1</span><span>学生反馈"明明登录了，点两下又让我重新登录"。</span></li>
+      <li><span class="n">2</span><span>数据库监控显示：学生总数没变，课程列表查询的 QPS 却变成了原来的 <span class="num">4</span> 倍。</span></li>
+      <li><span class="n">3</span><span>一个接口偶发 500，日志分散在 4 台机器上，值班同学花了 <span class="num">40</span> 分钟才找到出错的那一台。</span></li>
+    </ul>
+  </div>
+
+  <div class="question">
+    <span class="pill">问题 1</span>
+    <h3>负载均衡的收益与代价是什么？</h3>
+    <p>收益请逐条对应到 L-02 的非功能性需求类别；代价请沿用 L-04 的读法"瓶颈 → 方案 → 新问题"，至少解释上面三件事的成因并给出常规解法。</p>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第二幕 ============ -->
+<section class="act" id="act2">
+  <div class="numeral" aria-hidden="true">2</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 2</span>
+    <h2>压测</h2>
+    <p class="leads">引出 <b>问题 2 · 吞吐 vs 响应时间</b></p>
+  </header>
+
+  <div class="prose">
+    <p>新架构上线前做了对照压测。4 台应用服务器中有 3 台是新机器，1 台是去年那台旧机器（处理能力约为新机器的一半）。</p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>对照压测 · 查询接口</caption>
+      <thead><tr><th>场景</th><th>架构</th><th class="n">p50</th><th class="n">p95</th><th class="n">p99</th><th class="n">错误率</th></tr></thead>
+      <tbody>
+        <tr><td>轻载 · 200 QPS</td><td>单机</td><td class="n">18 ms</td><td class="n">40 ms</td><td class="n">60 ms</td><td class="n">0</td></tr>
+        <tr><td>轻载 · 200 QPS</td><td>4 台 + Nginx</td><td class="n">19 ms</td><td class="n">42 ms</td><td class="n">65 ms</td><td class="n">0</td></tr>
+        <tr><td>重载 · 2400 QPS</td><td>单机</td><td class="n bad">2.1 s</td><td class="n bad">4.8 s</td><td class="n bad">超时</td><td class="n bad">9%</td></tr>
+        <tr><td>重载 · 2400 QPS</td><td>4 台（新旧混用）+ Nginx <strong>轮询</strong></td><td class="n">26 ms</td><td class="n">300 ms</td><td class="n warn">1.6 s</td><td class="n">0</td></tr>
+        <tr><td>重载 · 2400 QPS</td><td>4 台（新旧混用）+ Nginx <strong>最少连接</strong></td><td class="n">25 ms</td><td class="n">170 ms</td><td class="n">400 ms</td><td class="n">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 270" role="img" aria-label="五个压测场景的 p50、p95、p99 画在同一条对数刻度的时间轴上。轻载下单机与四台几乎重合；重载下单机的三个点全部落在 2 秒以上，四台轮询的 p99 到 1.6 秒，四台最少连接把 p99 收回 400 毫秒。">
+        <defs>
+          <marker id="a2red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-red"/></marker>
+        </defs>
+        <circle cx="280" cy="18" r="5" class="pt"/><text x="290" y="22" class="lbl-s">p50</text>
+        <circle cx="330" cy="18" r="5" class="pt-2"/><text x="340" y="22" class="lbl-s">p95</text>
+        <rect x="376" y="13" width="10" height="10" class="pt-3"/><text x="392" y="22" class="lbl-s">p99</text>
+        <line x1="270" y1="232" x2="730" y2="232" class="axis"/>
+        <line x1="270" y1="40" x2="270" y2="232" class="grid"/>
+        <line x1="423.3" y1="40" x2="423.3" y2="232" class="grid"/>
+        <line x1="576.7" y1="40" x2="576.7" y2="232" class="grid"/>
+        <line x1="730" y1="40" x2="730" y2="232" class="grid"/>
+        <text x="270" y="250" text-anchor="middle" class="lbl-m lbl-mono">10 ms</text>
+        <text x="423.3" y="250" text-anchor="middle" class="lbl-m lbl-mono">100 ms</text>
+        <text x="576.7" y="250" text-anchor="middle" class="lbl-m lbl-mono">1 s</text>
+        <text x="730" y="250" text-anchor="middle" class="lbl-m lbl-mono">10 s</text>
+        <text x="500" y="266" text-anchor="middle" class="lbl-m">响应时间 · 对数刻度</text>
+        <line x1="622.8" y1="40" x2="622.8" y2="232" class="ln-amber dash"/>
+        <text x="628" y="48" class="lbl-amber">要求 p95 ≤ 2 s</text>
+        <use href="#i-server" x="14" y="48" width="18" height="24" class="u-acc"/>
+        <text x="90" y="64" class="lbl">轻载 · 单机</text>
+        <use href="#i-server" x="14" y="88" width="16" height="22" class="u-acc"/><use href="#i-server" x="32" y="88" width="16" height="22" class="u-acc"/><use href="#i-server" x="50" y="88" width="16" height="22" class="u-acc"/><use href="#i-server" x="68" y="88" width="16" height="22" class="u-acc"/>
+        <text x="90" y="104" class="lbl">轻载 · 4 台 + Nginx</text>
+        <use href="#i-server" x="14" y="128" width="18" height="24" class="u-acc"/>
+        <text x="90" y="144" class="lbl">重载 · 单机</text>
+        <use href="#i-server" x="14" y="168" width="16" height="22" class="u-acc"/><use href="#i-server" x="32" y="168" width="16" height="22" class="u-acc"/><use href="#i-server" x="50" y="168" width="16" height="22" class="u-acc"/><use href="#i-server" x="68" y="168" width="16" height="22" class="u-amber"/>
+        <text x="90" y="180" class="lbl">重载 · 4 台 · 轮询</text>
+        <text x="90" y="195" class="lbl-m">含 1 台旧机器</text>
+        <use href="#i-server" x="14" y="208" width="16" height="22" class="u-acc"/><use href="#i-server" x="32" y="208" width="16" height="22" class="u-acc"/><use href="#i-server" x="50" y="208" width="16" height="22" class="u-acc"/><use href="#i-server" x="68" y="208" width="16" height="22" class="u-amber"/>
+        <text x="90" y="220" class="lbl">重载 · 4 台 · 最少连接</text>
+        <text x="90" y="235" class="lbl-m">含 1 台旧机器</text>
+        <line x1="309.2" y1="60" x2="389.3" y2="60" class="ln-thin"/>
+        <circle cx="309.2" cy="60" r="5" class="pt"/><circle cx="362.3" cy="60" r="5" class="pt-2"/><rect x="384.3" y="55" width="10" height="10" class="pt-3"/>
+        <line x1="312.7" y1="100" x2="394.6" y2="100" class="ln-thin"/>
+        <circle cx="312.7" cy="100" r="5" class="pt"/><circle cx="365.6" cy="100" r="5" class="pt-2"/><rect x="389.6" y="95" width="10" height="10" class="pt-3"/>
+        <text x="410" y="104" class="lbl-m">比单机慢 1～5 ms</text>
+        <line x1="626.1" y1="140" x2="740" y2="140" class="ln-red" marker-end="url(#a2red)"/>
+        <circle cx="626.1" cy="140" r="5" class="pt"/><circle cx="681.1" cy="140" r="5" class="pt-2"/>
+        <text x="735" y="129" text-anchor="end" class="lbl-red">p99 超时 →</text>
+        <line x1="333.6" y1="180" x2="607.9" y2="180" class="ln-thin"/>
+        <circle cx="333.6" cy="180" r="5" class="pt"/><circle cx="496.5" cy="180" r="5" class="pt-2"/><rect x="602.9" y="175" width="10" height="10" class="pt-3"/>
+        <text x="606" y="170" text-anchor="end" class="lbl-m">p99 1.6 s</text>
+        <line x1="331" y1="220" x2="515.6" y2="220" class="ln-thin"/>
+        <circle cx="331" cy="220" r="5" class="pt"/><circle cx="458.7" cy="220" r="5" class="pt-2"/><rect x="510.6" y="215" width="10" height="10" class="pt-3"/>
+        <text x="530" y="224" class="lbl-m">p99 400 ms</text>
+      </svg>
+    </div>
+    <figcaption><b>同一条对数刻度的时间轴上，五个场景的差异一眼可见。</b>轻载的两行几乎重合；重载的单机整行落在 2 秒右侧；同样 4 台机器（橙色是那台旧机器），只换一个均衡策略，p99 就相差 4 倍。</figcaption>
+  </figure>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 250" role="img" aria-label="两个面板对比轮询和最少连接。轮询时四台服务器各收 25% 的请求，处理能力只有一半的旧机器前面排起六个人的长队；最少连接时旧机器只收约 14% 的请求，四台前面的队伍都只有两三个人。">
+        <defs>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker>
+        </defs>
+        <text x="20" y="20" class="lbl-m lbl-mono">轮询 · 每台 25%</text>
+        <use href="#i-lb" x="150" y="26" width="70" height="44" class="u-acc"/>
+        <text x="228" y="52" class="lbl-s">Nginx</text>
+        <line x1="185" y1="70" x2="60" y2="120" class="ln-thin" marker-end="url(#a2)"/>
+        <line x1="185" y1="70" x2="143" y2="120" class="ln-thin" marker-end="url(#a2)"/>
+        <line x1="185" y1="70" x2="227" y2="120" class="ln-thin" marker-end="url(#a2)"/>
+        <line x1="185" y1="70" x2="300" y2="62" class="ln-thin" marker-end="url(#a2)"/>
+        <use href="#i-person" x="53" y="148" width="14" height="18" class="u-acc"/><use href="#i-person" x="53" y="132" width="14" height="18" class="u-acc"/>
+        <use href="#i-person" x="136" y="148" width="14" height="18" class="u-acc"/><use href="#i-person" x="136" y="132" width="14" height="18" class="u-acc"/>
+        <use href="#i-person" x="220" y="148" width="14" height="18" class="u-acc"/><use href="#i-person" x="220" y="132" width="14" height="18" class="u-acc"/>
+        <use href="#i-person" x="303" y="148" width="14" height="18" class="u-amber"/><use href="#i-person" x="303" y="132" width="14" height="18" class="u-amber"/><use href="#i-person" x="303" y="116" width="14" height="18" class="u-amber"/><use href="#i-person" x="303" y="100" width="14" height="18" class="u-amber"/><use href="#i-person" x="303" y="84" width="14" height="18" class="u-amber"/><use href="#i-person" x="303" y="68" width="14" height="18" class="u-amber"/>
+        <text x="322" y="96" class="lbl-amber">排队 → p99 1.6 s</text>
+        <use href="#i-server" x="43" y="170" width="34" height="46" class="u-acc"/><text x="60" y="232" text-anchor="middle" class="lbl-s">新</text>
+        <use href="#i-server" x="126" y="170" width="34" height="46" class="u-acc"/><text x="143" y="232" text-anchor="middle" class="lbl-s">新</text>
+        <use href="#i-server" x="210" y="170" width="34" height="46" class="u-acc"/><text x="227" y="232" text-anchor="middle" class="lbl-s">新</text>
+        <use href="#i-server" x="293" y="170" width="34" height="46" class="u-amber"/><text x="310" y="232" text-anchor="middle" class="lbl-s">旧 · ½ 速</text>
+        <line x1="380" y1="14" x2="380" y2="240" class="grid"/>
+        <text x="400" y="20" class="lbl-m lbl-mono">最少连接 · 约 29 / 29 / 29 / 14%</text>
+        <use href="#i-lb" x="530" y="26" width="70" height="44" class="u-acc"/>
+        <text x="608" y="52" class="lbl-s">Nginx</text>
+        <line x1="565" y1="70" x2="440" y2="104" class="ln-thin" marker-end="url(#a2)"/>
+        <line x1="565" y1="70" x2="523" y2="104" class="ln-thin" marker-end="url(#a2)"/>
+        <line x1="565" y1="70" x2="607" y2="104" class="ln-thin" marker-end="url(#a2)"/>
+        <line x1="565" y1="70" x2="690" y2="120" class="ln-thin dash" marker-end="url(#a2)"/>
+        <use href="#i-person" x="433" y="148" width="14" height="18" class="u-acc"/><use href="#i-person" x="433" y="132" width="14" height="18" class="u-acc"/><use href="#i-person" x="433" y="116" width="14" height="18" class="u-acc"/>
+        <use href="#i-person" x="516" y="148" width="14" height="18" class="u-acc"/><use href="#i-person" x="516" y="132" width="14" height="18" class="u-acc"/><use href="#i-person" x="516" y="116" width="14" height="18" class="u-acc"/>
+        <use href="#i-person" x="600" y="148" width="14" height="18" class="u-acc"/><use href="#i-person" x="600" y="132" width="14" height="18" class="u-acc"/><use href="#i-person" x="600" y="116" width="14" height="18" class="u-acc"/>
+        <use href="#i-person" x="683" y="148" width="14" height="18" class="u-amber"/><use href="#i-person" x="683" y="132" width="14" height="18" class="u-amber"/>
+        <text x="702" y="146" class="lbl-s">p99 400 ms</text>
+        <use href="#i-server" x="423" y="170" width="34" height="46" class="u-acc"/><text x="440" y="232" text-anchor="middle" class="lbl-s">新</text>
+        <use href="#i-server" x="506" y="170" width="34" height="46" class="u-acc"/><text x="523" y="232" text-anchor="middle" class="lbl-s">新</text>
+        <use href="#i-server" x="590" y="170" width="34" height="46" class="u-acc"/><text x="607" y="232" text-anchor="middle" class="lbl-s">新</text>
+        <use href="#i-server" x="673" y="170" width="34" height="46" class="u-amber"/><text x="690" y="232" text-anchor="middle" class="lbl-s">旧 · ½ 速</text>
+      </svg>
+    </div>
+    <figcaption><b>同样 4 台机器，请求怎么分决定了队排在哪里。</b>小人是正在排队的请求。轮询不知道旧机器慢，照样给它 1/4 的请求；最少连接只看谁手头的活少，慢机器自然拿得少。</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p>同事看完说："吞吐翻了几倍，响应时间也全面变快了。"你们觉得这句话说得不够准确。</p>
+  </div>
+
+  <div class="question">
+    <span class="pill">问题 2</span>
+    <h3>负载均衡带来的通常是吞吐量的提升，响应时间是否也会变化？</h3>
+    <p>请解释表中三件事：</p>
+    <ol type="a">
+      <li>轻载时为什么 4 台反而比单机慢了 1～5 ms；</li>
+      <li>重载时为什么 p95 从 4.8 秒掉到几百毫秒——用 L-03 的响应时间分解（建连 + 传输 + 后端处理）和实验里的 Little's Law（<span class="num">L = λ × W</span>）说明排队在其中的角色；</li>
+      <li>同样 4 台机器，轮询的 p99 为什么是最少连接的 4 倍。</li>
+    </ol>
+    <p>最后回答：负载均衡改善的到底是平均响应时间还是尾延迟，在什么条件下成立？</p>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第三幕 ============ -->
+<section class="act" id="act3">
+  <div class="numeral" aria-hidden="true">3</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 3</span>
+    <h2>日常</h2>
+    <p class="leads">引出 <b>问题 3 · 不只是性能</b></p>
+  </header>
+
+  <div class="prose">
+    <p>选课高峰过去，学期中平时流量只有几十 QPS，4 台机器 CPU 利用率 <span class="num">3%</span>。这一学期发生了这些事：</p>
+    <ul>
+      <li>周三中午要修一个 bug。去年这种情况得提前贴公告停机 10 分钟；这次你们在 Nginx 上把机器逐台摘下、更新、再挂回，学生无感。</li>
+      <li>信息安全部门要求全站 HTTPS，并限制单个 IP 每秒请求数。你们只在 Nginx 上配了一次。</li>
+      <li>排查一个慢接口，Nginx 访问日志里的 <code>upstream_response_time</code> 一列直接看出是哪台机器慢。</li>
+      <li>主任问："平时 4 台机器只用 3%，能不能关掉两台省电，选课前再开？"</li>
+    </ul>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 298" role="img" aria-label="Nginx 作为唯一入口，旁边挂着四项只需配置一次的能力：TLS 终结、单 IP 限流、健康检查、访问日志。下方四台 Tomcat 中，第一台已从 Nginx 摘除正在更新，其余三台在运行，CPU 3%，其中两台被问能否关停。">
+        <defs>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker>
+        </defs>
+        <use href="#i-lb" x="30" y="28" width="100" height="64" class="u-acc"/>
+        <text x="80" y="112" text-anchor="middle" class="lbl lbl-b">Nginx · 唯一入口</text>
+        <rect x="230" y="30" width="150" height="34" rx="17" class="chip"/>
+        <use href="#i-lock" x="244" y="36" width="18" height="22" class="u-ink"/>
+        <text x="270" y="52" class="lbl-s">TLS 终结 · HTTPS</text>
+        <rect x="392" y="30" width="150" height="34" rx="17" class="chip"/>
+        <use href="#i-gauge" x="404" y="39" width="24" height="16" class="u-ink"/>
+        <text x="436" y="52" class="lbl-s">单 IP 限流</text>
+        <rect x="554" y="30" width="150" height="34" rx="17" class="chip"/>
+        <use href="#i-pulse" x="564" y="39" width="28" height="14" class="u-ink"/>
+        <text x="600" y="52" class="lbl-s">健康检查 · 3 s</text>
+        <rect x="230" y="74" width="474" height="34" rx="17" class="chip"/>
+        <use href="#i-log" x="244" y="79" width="20" height="24" class="u-ink"/>
+        <text x="272" y="96" class="lbl-s lbl-mono">access.log: upstream_addr  upstream_response_time  status</text>
+        <line x1="132" y1="47" x2="228" y2="47" class="ln-thin"/>
+        <line x1="132" y1="91" x2="228" y2="91" class="ln-thin"/>
+        <line x1="80" y1="118" x2="105" y2="166" class="ln-thin dash"/>
+        <text x="60" y="150" class="lbl-m">不转发</text>
+        <line x1="80" y1="118" x2="285" y2="166" class="ln" marker-end="url(#a3)"/>
+        <line x1="80" y1="118" x2="465" y2="166" class="ln" marker-end="url(#a3)"/>
+        <line x1="80" y1="118" x2="645" y2="166" class="ln" marker-end="url(#a3)"/>
+        <use href="#i-server" x="83" y="168" width="44" height="60" class="u-ghost"/>
+        <use href="#i-wrench" x="118" y="156" width="26" height="26" class="u-amber"/>
+        <text x="105" y="246" text-anchor="middle" class="lbl-s">Tomcat 1</text>
+        <text x="105" y="261" text-anchor="middle" class="lbl-amber">已摘除 · 更新中</text>
+        <use href="#i-server" x="263" y="168" width="44" height="60" class="u-acc"/>
+        <text x="285" y="246" text-anchor="middle" class="lbl-s">Tomcat 2</text>
+        <text x="285" y="261" text-anchor="middle" class="lbl-m lbl-mono">CPU 3%</text>
+        <use href="#i-server" x="443" y="168" width="44" height="60" class="u-acc"/>
+        <use href="#i-power" x="482" y="156" width="20" height="20" class="u-muted"/>
+        <text x="465" y="246" text-anchor="middle" class="lbl-s">Tomcat 3</text>
+        <text x="465" y="261" text-anchor="middle" class="lbl-m lbl-mono">CPU 3%</text>
+        <use href="#i-server" x="623" y="168" width="44" height="60" class="u-acc"/>
+        <use href="#i-power" x="662" y="156" width="20" height="20" class="u-muted"/>
+        <text x="645" y="246" text-anchor="middle" class="lbl-s">Tomcat 4</text>
+        <text x="645" y="261" text-anchor="middle" class="lbl-m lbl-mono">CPU 3%</text>
+        <path d="M425 268 L425 274 L685 274 L685 268" class="ln-thin"/>
+        <text x="555" y="291" text-anchor="middle" class="lbl-m">平时能关掉这两台？需要哪些前提？</text>
+      </svg>
+    </div>
+    <figcaption><b>所有流量经过同一个入口，很多事就只用做一次。</b>发布时把一台摘下来更新（扳手），其余三台继续服务；HTTPS、限流、健康检查、访问日志都配在 Nginx 上。电源符号标出主任想关掉的两台。</figcaption>
+  </figure>
+
+  <div class="question">
+    <span class="pill">问题 3</span>
+    <h3>负载均衡带来的仅仅是性能提升吗？</h3>
+    <p>请从可用性、可维护性（发布与变更）、安全性、可观测性、成本/弹性中至少选三个方面，各给出一个具体机制，并说明它是负载均衡"顺带"提供的，还是要额外建设的。回答主任的问题时，说明"关掉两台"需要哪些前提。</p>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第四幕 ============ -->
+<section class="act" id="act4">
+  <div class="numeral" aria-hidden="true">4</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 4</span>
+    <h2>故障</h2>
+    <p class="leads">引出 <b>问题 4 · 复杂但可靠</b></p>
+  </header>
+
+  <div class="prose">
+    <p>期中，一台应用服务器磁盘写满宕机，Nginx 健康检查在 <span class="num">3</span> 秒内把它摘除，学生无感。一个月后，另一台内核 panic，同样无感。学期末统计：</p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>学期末统计</caption>
+      <thead><tr><th></th><th>单机时代（过去两年）</th><th>本学期（4 台 + Nginx）</th></tr></thead>
+      <tbody>
+        <tr><td>机器故障事件</td><td><span class="num">3</span> 次</td><td><span class="num">5</span> 次<br><span class="sub-note">磁盘满、内核 panic、OOM ×2、网卡故障</span></td></tr>
+        <tr><td>服务不可用时长</td><td><span class="num" style="color:var(--red)">约 90 分钟</span><br><span class="sub-note">每次人工恢复 20～40 分钟</span></td><td><span class="num">3</span> 分钟</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 120" role="img" aria-label="一学期的时间轴：五次机器故障都被健康检查在 3 秒内摘除，服务不受影响；另有一次持续 3 分钟的全站 502，原因是健康检查配置被改错。">
+        <line x1="40" y1="70" x2="730" y2="70" class="axis"/>
+        <text x="40" y="98" text-anchor="middle" class="lbl-m lbl-mono">9 月</text>
+        <text x="178" y="98" text-anchor="middle" class="lbl-m lbl-mono">10 月</text>
+        <text x="316" y="98" text-anchor="middle" class="lbl-m lbl-mono">11 月</text>
+        <text x="454" y="98" text-anchor="middle" class="lbl-m lbl-mono">12 月</text>
+        <text x="592" y="98" text-anchor="middle" class="lbl-m lbl-mono">1 月</text>
+        <line x1="178" y1="66" x2="178" y2="74" class="axis"/>
+        <line x1="316" y1="66" x2="316" y2="74" class="axis"/>
+        <line x1="454" y1="66" x2="454" y2="74" class="axis"/>
+        <line x1="592" y1="66" x2="592" y2="74" class="axis"/>
+        <use href="#i-pulse" x="60" y="22" width="30" height="15" class="u-ink"/>
+        <text x="98" y="34" class="lbl-m">机器故障：健康检查 3 秒内摘除，学生无感</text>
+        <use href="#i-warn" x="321" y="48" width="18" height="17" class="u-muted"/><text x="330" y="42" text-anchor="middle" class="lbl-s">磁盘满</text>
+        <use href="#i-warn" x="461" y="48" width="18" height="17" class="u-muted"/><text x="470" y="42" text-anchor="middle" class="lbl-s">内核 panic</text>
+        <use href="#i-warn" x="521" y="48" width="18" height="17" class="u-muted"/><text x="530" y="42" text-anchor="middle" class="lbl-s">OOM</text>
+        <use href="#i-warn" x="591" y="48" width="18" height="17" class="u-muted"/><text x="600" y="42" text-anchor="middle" class="lbl-s">OOM</text>
+        <use href="#i-warn" x="681" y="48" width="18" height="17" class="u-muted"/><text x="690" y="42" text-anchor="middle" class="lbl-s">网卡</text>
+        <rect x="644" y="58" width="8" height="24" class="evt-red"/>
+        <text x="648" y="22" text-anchor="middle" class="lbl-red lbl-b">全站 502 · 3 分钟</text>
+      </svg>
+    </div>
+    <figcaption><b>五个灰色三角没有造成一分钟不可用，红色那一格却有 3 分钟。</b>那 3 分钟不是机器坏了：有人把健康检查的间隔和失败阈值改小了，一次网络抖动让 Nginx 把 4 台机器全部判为不健康，全站 502。</figcaption>
+  </figure>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>教务处主任</span></div>
+    <div>
+      <p>"机器多了，坏的次数也多了，系统还多了一个所有流量都要经过的 Nginx——按理说应该更脆弱才对，怎么反而更稳了？还有，Nginx 自己坏了怎么办？"</p>
+    </div>
+  </blockquote>
+
+  <div class="prose">
+    <p>你们告诉他 Nginx 是两台主备、用 keepalived 漂移一个虚拟 IP，切换 <span class="num">2</span> 秒。他接着问："那为什么应用服务器不也搞主备，非要弄 4 台？"</p>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 262" role="img" aria-label="左侧串联结构：Nginx、Tomcat、MySQL 依次相连，整体可用性是各环节可用性的乘积。右侧并联结构：主备两台 Nginx 共享一个虚拟 IP，下面四台 Tomcat 并行，只要一台存活就能服务，可用性为 1 减去各台不可用概率的乘积。">
+        <defs>
+          <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker>
+        </defs>
+        <text x="20" y="22" class="lbl-m lbl-mono">串联 · 任一环节坏，整体坏</text>
+        <use href="#i-lb" x="24" y="86" width="64" height="40" class="u-acc"/>
+        <line x1="92" y1="106" x2="118" y2="106" class="ln" marker-end="url(#a4)"/>
+        <use href="#i-server" x="122" y="78" width="40" height="54" class="u-acc"/>
+        <line x1="166" y1="106" x2="196" y2="106" class="ln" marker-end="url(#a4)"/>
+        <use href="#i-db" x="200" y="80" width="52" height="52" class="u-ink"/>
+        <text x="56" y="150" text-anchor="middle" class="lbl-s">Nginx</text>
+        <text x="142" y="150" text-anchor="middle" class="lbl-s">Tomcat</text>
+        <text x="226" y="150" text-anchor="middle" class="lbl-s">MySQL</text>
+        <text x="142" y="196" text-anchor="middle" class="lbl lbl-mono">A = A₁ × A₂ × A₃</text>
+        <text x="142" y="216" text-anchor="middle" class="lbl-m">越多越差</text>
+        <line x1="330" y1="14" x2="330" y2="250" class="grid"/>
+        <text x="356" y="22" class="lbl-m lbl-mono">并联 · 全部坏才坏</text>
+        <use href="#i-lb" x="556" y="50" width="80" height="50" class="u-ghost"/>
+        <use href="#i-lb" x="530" y="32" width="80" height="50" class="u-acc"/>
+        <text x="646" y="48" class="lbl-s">Nginx · 主 / 备</text>
+        <text x="646" y="64" class="lbl-m">VIP · keepalived</text>
+        <text x="646" y="80" class="lbl-m">切换 2 s</text>
+        <line x1="580" y1="102" x2="450" y2="142" class="ln-thin" marker-end="url(#a4)"/>
+        <line x1="580" y1="102" x2="530" y2="142" class="ln-thin" marker-end="url(#a4)"/>
+        <line x1="580" y1="102" x2="610" y2="142" class="ln-thin" marker-end="url(#a4)"/>
+        <line x1="580" y1="102" x2="690" y2="142" class="ln-thin" marker-end="url(#a4)"/>
+        <use href="#i-server" x="432" y="144" width="36" height="48" class="u-acc"/><text x="450" y="208" text-anchor="middle" class="lbl-s">99%</text>
+        <use href="#i-server" x="512" y="144" width="36" height="48" class="u-acc"/><text x="530" y="208" text-anchor="middle" class="lbl-s">99%</text>
+        <use href="#i-server" x="592" y="144" width="36" height="48" class="u-acc"/><text x="610" y="208" text-anchor="middle" class="lbl-s">99%</text>
+        <use href="#i-server" x="672" y="144" width="36" height="48" class="u-acc"/><text x="690" y="208" text-anchor="middle" class="lbl-s">99%</text>
+        <text x="570" y="234" text-anchor="middle" class="lbl lbl-mono">A = 1 − (1 − 0.99)⁴ = ?</text>
+        <text x="570" y="252" text-anchor="middle" class="lbl-m">前提：故障独立、剩余容量够</text>
+      </svg>
+    </div>
+    <figcaption><b>同样是"多了部件"，串起来和并起来算法相反。</b>Nginx 和后端整体是串联关系，四台后端之间是并联关系。整体可用性大约是 Nginx 的可用性乘以后端并联的结果，所以 Nginx 自己必须足够可靠。</figcaption>
+  </figure>
+
+  <div class="question">
+    <span class="pill">问题 4</span>
+    <h3>负载均衡使系统变复杂了，为什么可靠性没有显著恶化？</h3>
+    <p>请至少回答：</p>
+    <ol type="a">
+      <li>串联结构和并联结构的可用性分别怎么算？每台应用服务器可用性按 99% 计，4 台并联、只要 1 台存活即可服务时，整体可用性是多少？</li>
+      <li>主备为什么对 Nginx 可行、对应用服务器却不是首选（提示：状态）？</li>
+      <li>"故障次数"和"服务可用性"为什么一个变多、一个变好？</li>
+      <li>全站 502 那 3 分钟说明负载均衡引入了什么<strong>新的</strong>故障模式，还有哪些同类风险？</li>
+    </ol>
+    <p class="adv"><b>进阶 · 不计分</b>　如果选课高峰至少要 3 台机器才扛得住，此时"4 台中至少 3 台存活"的可用性是多少？这个结果对容量规划意味着什么？</p>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第五幕 ============ -->
+<section class="act" id="act5">
+  <div class="numeral" aria-hidden="true">5</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 5</span>
+    <h2>上限</h2>
+    <p class="leads">引出 <b>问题 5 · 有没有上限</b></p>
+  </header>
+
+  <div class="prose">
+    <p>暑假学校合并了一个校区，学生增至 <span class="num">5</span> 万。下学期还要开放"抢课"型热门课：每门 <span class="num">60</span> 个名额，预计 <span class="num">2000</span> 人同时抢。运维的第一反应是把 4 台加到 16 台。压测结果如下。</p>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <caption>选课提交接口（写）· 应用服务器数量 vs 吞吐</caption>
+      <thead><tr><th class="n">应用服务器数</th><th class="n">提交 TPS</th><th class="n">数据库 CPU</th><th>备注</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1</td><td class="n">300</td><td class="n">25%</td><td></td></tr>
+        <tr><td class="n">4</td><td class="n">690</td><td class="n">55%</td><td></td></tr>
+        <tr><td class="n">8</td><td class="n">870</td><td class="n">80%</td><td></td></tr>
+        <tr><td class="n">16</td><td class="n">1010</td><td class="n bad">95%</td><td>热门课那几行的行锁等待占提交耗时的 <span class="num">70%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 560 300" role="img" aria-label="提交 TPS 随应用服务器数量的变化曲线：1 台 300，4 台 690，8 台 870，16 台 1010，曲线趋于平缓，逼近一条画在 1200 TPS 处的虚线上限。另有一条更陡的点线表示理想的线性扩展。每个数据点旁标注了当时的数据库 CPU。">
+        <line x1="70" y1="240" x2="520" y2="240" class="axis"/>
+        <line x1="70" y1="30" x2="70" y2="240" class="axis"/>
+        <line x1="70" y1="195" x2="520" y2="195" class="grid"/>
+        <line x1="70" y1="150" x2="520" y2="150" class="grid"/>
+        <line x1="70" y1="105" x2="520" y2="105" class="grid"/>
+        <line x1="70" y1="60" x2="520" y2="60" class="grid"/>
+        <text x="62" y="244" text-anchor="end" class="lbl-m lbl-mono">0</text>
+        <text x="62" y="199" text-anchor="end" class="lbl-m lbl-mono">300</text>
+        <text x="62" y="154" text-anchor="end" class="lbl-m lbl-mono">600</text>
+        <text x="62" y="109" text-anchor="end" class="lbl-m lbl-mono">900</text>
+        <text x="62" y="64" text-anchor="end" class="lbl-m lbl-mono">1200</text>
+        <text x="30" y="26" class="lbl-m">TPS</text>
+        <text x="84.1" y="260" text-anchor="middle" class="lbl-m lbl-mono">1</text>
+        <text x="126.3" y="260" text-anchor="middle" class="lbl-m lbl-mono">4</text>
+        <text x="182.5" y="260" text-anchor="middle" class="lbl-m lbl-mono">8</text>
+        <text x="295" y="260" text-anchor="middle" class="lbl-m lbl-mono">16</text>
+        <text x="520" y="260" text-anchor="middle" class="lbl-m lbl-mono">32</text>
+        <text x="295" y="282" text-anchor="middle" class="lbl-m">应用服务器数 N</text>
+        <line x1="84.1" y1="195" x2="135.6" y2="30" class="ln-thin dots"/>
+        <text x="142" y="40" class="lbl-m">线性扩展（理想）</text>
+        <line x1="70" y1="60" x2="520" y2="60" class="ln-red dash"/>
+        <text x="514" y="54" text-anchor="end" class="lbl-red">理论上限 = ?</text>
+        <polyline points="84.1,195 98.1,168 112.2,150 126.3,137.1 154.4,120 182.5,109.1 238.8,96 295,88.4 407.5,80 520,75.4" class="ln-acc"/>
+        <circle cx="84.1" cy="195" r="5" class="pt"/><text x="94" y="200" class="lbl-acc lbl-mono">300</text>
+        <use href="#i-db" x="92" y="206" width="14" height="14" class="u-muted"/><text x="109" y="217" class="lbl-m lbl-mono">25%</text>
+        <circle cx="126.3" cy="137.1" r="5" class="pt"/><text x="136" y="142" class="lbl-acc lbl-mono">690</text>
+        <use href="#i-db" x="134" y="148" width="14" height="14" class="u-muted"/><text x="151" y="159" class="lbl-m lbl-mono">55%</text>
+        <circle cx="182.5" cy="109.1" r="5" class="pt"/><text x="192" y="114" class="lbl-acc lbl-mono">870</text>
+        <use href="#i-db" x="190" y="120" width="14" height="14" class="u-muted"/><text x="207" y="131" class="lbl-m lbl-mono">80%</text>
+        <circle cx="295" cy="88.4" r="5" class="pt"/><text x="300" y="108" class="lbl-acc lbl-mono">1010</text>
+        <use href="#i-db" x="300" y="114" width="14" height="14" class="u-red"/><text x="317" y="125" class="lbl-red lbl-mono">95%</text>
+        <text x="410" y="102" class="lbl-m">再加机器，曲线几乎不动</text>
+      </svg>
+    </div>
+    <figcaption><b>机器翻倍，吞吐没有翻倍，而且越往后越不划算。</b>蓝线是实测走势，点线是"加一台多 300"的理想情形，数据库图标旁是当时的数据库 CPU。红色虚线的位置需要你们用 Amdahl 定律算出来。</figcaption>
+  </figure>
+
+  <div class="prose">
+    <p><strong>查询接口（读）</strong>：抢课时学生每秒刷一次余量，预计 <span class="num">3</span> 万 QPS。查询接口随机器数近似线性扩展，但 Nginx（HTTPS）单机压到约 <span class="num">2.5</span> 万 QPS 时 CPU 打满。</p>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 272" role="img" aria-label="两千名学生抢一门课，Nginx 把提交均匀分发到 16 台 Tomcat，但所有提交最终都落到数据库里同一门热门课的余量行上，在行锁处排队。">
+        <defs>
+          <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-red"/></marker>
+          <marker id="a5i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker>
+        </defs>
+        <use href="#i-crowd" x="236" y="10" width="60" height="42" class="u-muted"/>
+        <text x="266" y="66" text-anchor="middle" class="lbl-s">2000 人抢 60 个名额</text>
+        <line x1="300" y1="30" x2="356" y2="30" class="ln" marker-end="url(#a5i)"/>
+        <use href="#i-lb" x="360" y="6" width="76" height="48" class="u-acc"/>
+        <text x="444" y="26" class="lbl-s">Nginx</text>
+        <text x="444" y="41" class="lbl-m">均匀分发到 16 台</text>
+        <line x1="398" y1="54" x2="65" y2="98" class="ln-thin"/>
+        <line x1="398" y1="54" x2="155" y2="98" class="ln-thin"/>
+        <line x1="398" y1="54" x2="245" y2="98" class="ln-thin"/>
+        <line x1="398" y1="54" x2="335" y2="98" class="ln-thin"/>
+        <line x1="398" y1="54" x2="425" y2="98" class="ln-thin"/>
+        <line x1="398" y1="54" x2="515" y2="98" class="ln-thin"/>
+        <line x1="398" y1="54" x2="605" y2="98" class="ln-thin"/>
+        <line x1="398" y1="54" x2="695" y2="98" class="ln-thin"/>
+        <use href="#i-server" x="45" y="100" width="40" height="52" class="u-acc"/><text x="65" y="168" text-anchor="middle" class="lbl-m">Tomcat 1</text>
+        <use href="#i-server" x="135" y="100" width="40" height="52" class="u-acc"/><text x="155" y="168" text-anchor="middle" class="lbl-m">Tomcat 2</text>
+        <use href="#i-server" x="225" y="100" width="40" height="52" class="u-acc"/><text x="245" y="168" text-anchor="middle" class="lbl-m">Tomcat 3</text>
+        <use href="#i-server" x="315" y="100" width="40" height="52" class="u-acc"/><text x="335" y="168" text-anchor="middle" class="lbl-m">…</text>
+        <use href="#i-server" x="405" y="100" width="40" height="52" class="u-acc"/><text x="425" y="168" text-anchor="middle" class="lbl-m">…</text>
+        <use href="#i-server" x="495" y="100" width="40" height="52" class="u-acc"/><text x="515" y="168" text-anchor="middle" class="lbl-m">Tomcat 14</text>
+        <use href="#i-server" x="585" y="100" width="40" height="52" class="u-acc"/><text x="605" y="168" text-anchor="middle" class="lbl-m">Tomcat 15</text>
+        <use href="#i-server" x="675" y="100" width="40" height="52" class="u-acc"/><text x="695" y="168" text-anchor="middle" class="lbl-m">Tomcat 16</text>
+        <line x1="65" y1="174" x2="372" y2="206" class="ln-red" marker-end="url(#a5)"/>
+        <line x1="155" y1="174" x2="374" y2="206" class="ln-red" marker-end="url(#a5)"/>
+        <line x1="245" y1="174" x2="376" y2="206" class="ln-red" marker-end="url(#a5)"/>
+        <line x1="335" y1="174" x2="378" y2="206" class="ln-red" marker-end="url(#a5)"/>
+        <line x1="425" y1="174" x2="382" y2="206" class="ln-red" marker-end="url(#a5)"/>
+        <line x1="515" y1="174" x2="384" y2="206" class="ln-red" marker-end="url(#a5)"/>
+        <line x1="605" y1="174" x2="386" y2="206" class="ln-red" marker-end="url(#a5)"/>
+        <line x1="695" y1="174" x2="388" y2="206" class="ln-red" marker-end="url(#a5)"/>
+        <use href="#i-db" x="190" y="196" width="56" height="56" class="u-ink"/>
+        <rect x="256" y="208" width="304" height="30" rx="3" class="box-bad"/>
+        <use href="#i-lock" x="266" y="212" width="18" height="22" class="u-red"/>
+        <text x="292" y="228" class="lbl-red lbl-mono">courses · id=CS101 · 余量 60 · 行锁</text>
+        <text x="572" y="228" class="lbl-red">全部在这一行排队</text>
+        <text x="218" y="268" text-anchor="middle" class="lbl-m">MySQL</text>
+      </svg>
+    </div>
+    <figcaption><b>负载均衡把请求分开了，数据却没有分开。</b>2000 个提交无论落到哪台 Tomcat，最后都要拿同一行的锁。加机器改变的是上半张图，问题在下半张图。</figcaption>
+  </figure>
+
+  <div class="question">
+    <span class="pill">问题 5</span>
+    <h3>负载均衡有没有上限？</h3>
+    <p>请分三层回答：</p>
+    <ol type="a">
+      <li><strong>负载均衡器自身的上限</strong>——用 L-04 的"数量级直觉"说明 Nginx 为什么在这个量级到顶，再往上系统该怎么扩（L-04 第六、七阶段）；</li>
+      <li><strong>横向扩展的上限</strong>——用 L-03 的 Amdahl 定律，从上表估算选课提交接口的串行比例 <span class="num">s</span>，并算出无论加多少台应用服务器提交 TPS 的理论上限，说明这个 <span class="num">s</span> 来自哪里；</li>
+      <li><strong>"均衡"本身的上限</strong>——请求级的负载均衡对"2000 人抢 60 个名额"这种数据级热点能做什么、不能做什么，解决办法应该放在哪一层。</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 作答要求 ============ -->
+<section class="block" id="req">
+  <div class="h-row"><span class="kicker">SUBMIT</span><h2>作答要求</h2></div>
+  <div class="prose">
+    <ol style="margin:0;padding-left:1.4em;display:grid;gap:8px">
+      <li>以小组为单位提交一份，五个问题都要作答，总篇幅建议 <span class="num">2000～3000</span> 字，可配图、表格和计算过程。文首列出小组成员（学号、姓名）。</li>
+      <li><strong>每个判断都要用场景中的数据或讲义中的概念支撑。</strong>不接受"提高了性能""增强了可靠性"这类没有度量、没有机制的表述（参考 L-02 对非功能性需求的 SMART 要求）。</li>
+      <li>允许查阅资料，须用自己的话写，文末列出参考来源。</li>
+      <li>文件命名：<code>Q-1-组号.md</code>。</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 评分 ============ -->
+<section class="block" id="rubric">
+  <div class="h-row"><span class="kicker">RUBRIC</span><h2>评分标准</h2><span class="kicker">满分 10 分 · 每题 2 分</span></div>
+  <div class="rubric">
+    <div class="score">2</div><div>判断准确；用了场景数据或做了计算；能指出成立条件或边界（"在……情况下成立，在……情况下不成立"）</div>
+    <div class="score s1">1</div><div>方向正确但停留在概念复述，没有用数据，或只讲一面</div>
+    <div class="score s0">0</div><div>未作答、明显错误，或与题目无关</div>
+  </div>
+  <p class="hard"><strong>硬性条件</strong>　第 2 题须解释表中 (a)(b)(c) 三件事；第 4 题须给出并联可用性的计算；第 5 题须估算 <span class="num">s</span> 并给出理论上限。缺任一项，该题最高 1 分。</p>
+</section>
+
+<!-- ============ 参考 ============ -->
+<section class="block" id="refs">
+  <div class="h-row"><span class="kicker">READING</span><h2>参考阅读</h2></div>
+  <ul class="refs">
+    <li>讲义：L-02（NFR 七类；微服务的服务发现与负载均衡、部署模式）、L-03（响应时间分解；Amdahl 定律；云原生对后端的要求）、L-04（第三、六、七阶段；数量级直觉；选课平台课程实践）</li>
+    <li>Google SRE Book, Ch. 19 <a href="https://sre.google/sre-book/load-balancing-frontend/">Load Balancing at the Frontend</a>, Ch. 20 <a href="https://sre.google/sre-book/load-balancing-datacenter/">Load Balancing in the Datacenter</a></li>
+    <li>J. Dean, L. A. Barroso, "The Tail at Scale", <em>Communications of the ACM</em>, 2013</li>
+    <li>nginx 文档 <a href="https://nginx.org/en/docs/http/load_balancing.html">Using nginx as HTTP load balancer</a></li>
+  </ul>
+</section>
+
+<footer>
+  <span>互联网产品开发与运维 · 2026 秋</span>
+  <span>思考题 1 · 一台 Nginx 引发的五个问题</span>
+</footer>
+
+</div>
+</body>
+</html>
