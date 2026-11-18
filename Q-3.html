@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>42 台机器，一个集群</title>
+<meta name="description" content="互联网产品开发与运维 · 思考题 3：三年后的平台把应用服务和离线推荐迁入一个容器集群，迁移前后的五件事，五个问题。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EDF1F5;
+  --ink:#1B2530; --ink-2:#4A5866; --muted:#6B7885; --rule:#D8DEE5; --rule-strong:#B9C3CE;
+  --accent:#2251C9; --accent-ink:#1B41A3; --accent-soft:#E8EEFB;
+  --amber:#B8681A; --amber-soft:#FBF1E4;
+  --red:#C23B32; --red-soft:#FBE9E7;
+  --green:#2E8B57;
+  --serif:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC","Segoe UI",Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1319; --surface:#151B23; --surface-2:#1B222C;
+    --ink:#E7ECF1; --ink-2:#B4BFCA; --muted:#8C98A4; --rule:#2B3541; --rule-strong:#3D4956;
+    --accent:#7FA3FF; --accent-ink:#A9C1FF; --accent-soft:#1B2740;
+    --amber:#E5A35A; --amber-soft:#2E2416;
+    --red:#F07A70; --red-soft:#3A1F1D;
+    --green:#5CC28A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1319; --surface:#151B23; --surface-2:#1B222C;
+  --ink:#E7ECF1; --ink-2:#B4BFCA; --muted:#8C98A4; --rule:#2B3541; --rule-strong:#3D4956;
+  --accent:#7FA3FF; --accent-ink:#A9C1FF; --accent-soft:#1B2740;
+  --amber:#E5A35A; --amber-soft:#2E2416;
+  --red:#F07A70; --red-soft:#3A1F1D;
+  --green:#5CC28A;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.75;
+  padding-inline:16px; padding-block:0 64px;
+}
+a{color:var(--accent-ink); text-decoration-color:var(--rule-strong); text-underline-offset:3px}
+a:hover{text-decoration-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+h1,h2,h3{font-family:var(--serif); font-weight:700; line-height:1.3; text-wrap:balance; margin:0}
+p{margin:0}
+strong{font-weight:600}
+code,.mono{font-family:var(--mono); font-size:.92em}
+.num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.sprite{position:absolute; width:0; height:0; overflow:hidden}
+
+.page{max-width:760px; margin:0 auto}
+
+/* ---------- header ---------- */
+.masthead{padding-block:40px 28px; border-bottom:1px solid var(--rule); display:grid; gap:20px}
+.eyebrow{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; color:var(--muted); font-size:13px; letter-spacing:.04em}
+.eyebrow .tag{font-family:var(--mono); font-size:12px; padding:2px 8px; border:1px solid var(--rule-strong); border-radius:3px; color:var(--ink-2)}
+.masthead h1{font-size:clamp(30px,6vw,44px); letter-spacing:.01em}
+.masthead .sub{color:var(--ink-2); font-size:17px; max-width:36em}
+.meta{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); margin:0}
+.meta div{background:var(--surface); padding:10px 14px}
+.meta dt{font-size:12px; color:var(--muted); letter-spacing:.06em}
+.meta dd{margin:2px 0 0; font-size:15px; font-weight:500}
+.meta dd .num{font-size:14px}
+
+.toc{display:flex; flex-wrap:wrap; gap:6px 4px; padding-block:14px; border-bottom:1px solid var(--rule); font-size:14px}
+.toc a{text-decoration:none; color:var(--ink-2); padding:3px 10px; border-radius:999px}
+.toc a:hover{background:var(--surface-2); color:var(--ink)}
+.toc a.q{color:var(--accent-ink)}
+
+/* ---------- prose ---------- */
+.prose{display:grid; gap:14px; max-width:42em}
+.prose ul{margin:0; padding-left:1.3em; display:grid; gap:6px}
+.lead{font-size:17px; color:var(--ink-2)}
+
+section.block{padding-block:40px; border-bottom:1px solid var(--rule); display:grid; gap:22px}
+section.block > h2{font-size:22px}
+.h-row{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap}
+.h-row .kicker{font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.08em}
+
+/* ---------- acts ---------- */
+.act{padding-block:44px; border-bottom:1px solid var(--rule); display:grid; grid-template-columns:72px 1fr; column-gap:20px}
+.act-body{display:grid; gap:22px; min-width:0}
+.act .numeral{font-family:var(--serif); font-weight:700; font-size:60px; line-height:1; color:var(--rule-strong); position:sticky; top:16px; align-self:start; padding-top:2px; font-variant-numeric:lining-nums}
+.act header{display:grid; gap:6px}
+.act header .kicker{font-family:var(--mono); font-size:12px; color:var(--muted); letter-spacing:.08em}
+.act header h2{font-size:26px}
+.act header .leads{font-size:14px; color:var(--muted)}
+.act header .leads b{color:var(--accent-ink); font-weight:500}
+@media (max-width:640px){
+  .act{grid-template-columns:1fr; row-gap:10px}
+  .act .numeral{position:static; font-size:40px; padding:0}
+}
+
+/* ---------- data tables ---------- */
+.tablewrap{overflow-x:auto; border:1px solid var(--rule); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:420px}
+caption{text-align:left; padding:10px 14px 8px; font-size:13px; color:var(--muted); caption-side:top; border-bottom:1px solid var(--rule)}
+th,td{padding:9px 14px; border-bottom:1px solid var(--rule); text-align:left; vertical-align:top}
+th{font-weight:500; color:var(--muted); font-size:13px; letter-spacing:.03em; background:var(--surface-2)}
+td:first-child,th:first-child{white-space:nowrap}
+td.n,th.n{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.bad{color:var(--red)}
+td.warn{color:var(--amber)}
+.sub-note{color:var(--muted); font-size:13px; font-family:var(--sans)}
+
+/* ---------- figures ---------- */
+figure{margin:0; display:grid; gap:10px}
+figure .fig{overflow-x:auto; background:var(--surface); border:1px solid var(--rule); padding:14px 12px}
+figure svg{display:block; width:100%; height:auto; max-width:100%; font-family:var(--sans); color:var(--ink)}
+figcaption{font-size:13.5px; color:var(--muted); line-height:1.6}
+figcaption b{color:var(--ink-2); font-weight:500}
+
+/* icon sprite styling — per-instance colors via custom properties on <use> */
+.ic-fill{fill:var(--ic-fill,var(--surface-2)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1.4; stroke-linejoin:round}
+.ic-slot{fill:var(--ic-slot,var(--surface)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1}
+.ic-screen{fill:var(--ic-screen,var(--surface)); stroke:var(--ic-line,var(--ink-2)); stroke-width:1}
+.ic-stroke{fill:none; stroke:var(--ic-line,var(--ink-2)); stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round}
+.ic-stroke-b{fill:none; stroke:var(--ic-line,var(--ink-2)); stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round}
+.ic-dot{fill:var(--ic-line,var(--ink-2))}
+.ic-led{fill:var(--ic-led,var(--green))}
+.ic-led2{fill:var(--ic-line,var(--rule-strong)); opacity:.6}
+.u-acc{--ic-fill:var(--accent-soft); --ic-line:var(--accent)}
+.u-amber{--ic-fill:var(--amber-soft); --ic-line:var(--amber)}
+.u-red{--ic-fill:var(--red-soft); --ic-line:var(--red); --ic-led:var(--red)}
+.u-ghost{--ic-fill:var(--surface); --ic-line:var(--rule-strong); --ic-led:var(--rule-strong)}
+.u-ink{--ic-fill:var(--surface); --ic-line:var(--ink)}
+.u-muted{--ic-fill:var(--surface-2); --ic-line:var(--muted)}
+
+/* svg drawing classes */
+.box{fill:var(--surface); stroke:var(--ink-2); stroke-width:1.2}
+.box-bad{fill:var(--red-soft); stroke:var(--red); stroke-width:1.2}
+.chip{fill:var(--surface); stroke:var(--rule-strong); stroke-width:1}
+.ln{fill:none; stroke:var(--ink-2); stroke-width:1.2}
+.ln-thin{fill:none; stroke:var(--rule-strong); stroke-width:1}
+.ln-acc{fill:none; stroke:var(--accent); stroke-width:1.6}
+.ln-acc-b{fill:none; stroke:var(--accent); stroke-width:3}
+.ln-amber{fill:none; stroke:var(--amber); stroke-width:1.4}
+.ln-red{fill:none; stroke:var(--red); stroke-width:1.6}
+.dash{stroke-dasharray:5 4}
+.dots{stroke-dasharray:2 3}
+.grid{stroke:var(--rule); stroke-width:1}
+.axis{stroke:var(--rule-strong); stroke-width:1}
+.lbl{fill:var(--ink); font-size:12.5px}
+.lbl-s{fill:var(--ink-2); font-size:11px}
+.lbl-m{fill:var(--muted); font-size:11px}
+.lbl-acc{fill:var(--accent-ink); font-size:12px}
+.lbl-amber{fill:var(--amber); font-size:11.5px}
+.lbl-red{fill:var(--red); font-size:11.5px}
+.lbl-b{font-weight:600}
+.lbl-mono{font-family:var(--mono); font-size:11px}
+.mk-ink{fill:var(--ink-2)}
+.mk-acc{fill:var(--accent)}
+.mk-amber{fill:var(--amber)}
+.mk-red{fill:var(--red)}
+.pt{fill:var(--accent); stroke:var(--surface); stroke-width:1.5}
+.pt-2{fill:var(--surface); stroke:var(--accent); stroke-width:1.8}
+.pt-3{fill:var(--ink-2); stroke:var(--surface); stroke-width:1.5}
+.badge{fill:var(--amber)}
+.badge-t{fill:#fff; font-size:11px; font-weight:700}
+.evt-red{fill:var(--red)}
+.ground{stroke:var(--rule-strong); stroke-width:1.5; stroke-dasharray:1 5; stroke-linecap:round}
+
+/* ---------- director quote ---------- */
+.quote{display:grid; grid-template-columns:auto 1fr; gap:14px; padding:18px 20px; background:var(--surface); border:1px solid var(--rule); margin:0}
+.quote .who{display:grid; gap:6px; justify-items:center; align-content:start; padding-right:14px; border-right:1px solid var(--rule)}
+.quote .who svg{width:34px; height:42px; display:block}
+.quote .who span{font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:.04em; white-space:nowrap}
+.quote p{font-family:var(--serif); font-size:17.5px; line-height:1.8; color:var(--ink)}
+.quote p + p{margin-top:8px}
+
+/* ---------- observations ---------- */
+.obs{display:grid; gap:8px; padding:0; margin:0; list-style:none}
+.obs li{display:grid; grid-template-columns:26px 1fr; gap:10px; align-items:start; font-size:15px}
+.obs .n{width:22px; height:22px; border-radius:50%; background:var(--amber); color:#fff; font-family:var(--mono); font-size:12px; font-weight:700; display:grid; place-items:center; margin-top:3px}
+
+/* ---------- question card ---------- */
+.question{position:relative; background:var(--accent-soft); border:1px solid var(--accent); padding:26px 22px 22px; display:grid; gap:12px; margin-top:8px}
+.question .pill{position:absolute; top:-13px; left:16px; background:var(--accent); color:#fff; font-family:var(--mono); font-size:12px; letter-spacing:.06em; padding:3px 10px}
+.question h3{font-size:19px; color:var(--ink)}
+.question p, .question li{font-size:15.5px; line-height:1.75}
+.question ol{margin:0; padding-left:1.4em; display:grid; gap:6px}
+.question .adv{font-size:14px; color:var(--ink-2); border-top:1px dashed var(--rule-strong); padding-top:10px}
+.question .adv b{color:var(--muted); font-weight:500; font-family:var(--mono); font-size:12px; letter-spacing:.06em}
+
+/* ---------- rubric ---------- */
+.rubric{display:grid; grid-template-columns:auto 1fr; border:1px solid var(--rule); background:var(--surface)}
+.rubric > div{padding:12px 16px; border-bottom:1px solid var(--rule); font-size:15px}
+.rubric > div:nth-last-child(-n+2){border-bottom:none}
+.rubric .score{font-family:var(--mono); font-size:22px; font-weight:500; color:var(--accent-ink); border-right:1px solid var(--rule); display:grid; place-items:center; min-width:64px}
+.rubric .score.s1{color:var(--amber)} .rubric .score.s0{color:var(--muted)}
+.hard{padding:14px 18px; background:var(--amber-soft); border:1px solid var(--amber); font-size:14.5px}
+.refs{margin:0; padding-left:1.2em; display:grid; gap:8px; font-size:14.5px}
+.refs li{overflow-wrap:anywhere}
+
+footer{padding-block:28px; color:var(--muted); font-size:13px; display:flex; flex-wrap:wrap; gap:8px 20px}
+
+@media (prefers-reduced-motion: no-preference){
+  html{scroll-behavior:smooth}
+}
+
+/* ---------- print ---------- */
+@page{size:A4; margin:16mm 14mm}
+@media print{
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"]{
+    --ground:#FFFFFF; --surface:#FFFFFF; --surface-2:#F0F2F5;
+    --ink:#111820; --ink-2:#3A4654; --muted:#5C6773; --rule:#C9D0D8; --rule-strong:#9AA4AF;
+    --accent:#1F49B5; --accent-ink:#173A93; --accent-soft:#EDF1FB;
+    --amber:#A85E14; --amber-soft:#FBF3E8;
+    --red:#B4342C; --red-soft:#FBEDEB;
+    --green:#2E8B57;
+    color-scheme:light;
+  }
+  *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  html{scroll-behavior:auto}
+  body{padding:0; font-size:12.5pt; line-height:1.6}
+  .page{max-width:none}
+  .toc{display:none}
+  .masthead{padding-block:0 18px}
+  .masthead h1{font-size:26pt}
+  .masthead .sub{font-size:12pt}
+  section.block{padding-block:20px}
+  .act{padding-block:22px; grid-template-columns:48px 1fr; column-gap:14px}
+  .act header, .h-row, .masthead{break-after:avoid}
+  .prose p, .prose li{orphans:3; widows:3}
+  .act .numeral{position:static; font-size:34pt}
+  .act header h2{font-size:18pt}
+  .act-body{gap:14px}
+  figure, .question, .tablewrap, .quote, .rubric, .hard{break-inside:avoid}
+  figure .fig{padding:8px 6px; overflow:visible}
+  figcaption{font-size:9.5pt}
+  table{font-size:10.5pt; min-width:0}
+  th,td{padding:5px 8px}
+  .question{padding:18px 16px 16px}
+  .question p,.question li{font-size:11.5pt}
+  .quote p{font-size:12.5pt}
+  a{color:inherit; text-decoration:none}
+  .refs a[href^="http"]::after{content:" — " attr(href); font-family:var(--mono); font-size:9pt; color:var(--muted)}
+  footer{padding-block:12px; break-before:avoid}
+}
+
+/* ---------- 思考题 2 新增 ---------- */
+figure svg.wide{min-width:560px}
+.term{margin:0; padding:14px 16px; background:var(--surface); border:1px solid var(--rule); font-family:var(--mono); font-size:13px; line-height:1.7; overflow-x:auto; color:var(--ink)}
+.term .c{color:var(--muted)}
+.term .p{color:var(--accent-ink)}
+.facts{display:grid; gap:8px; padding:0; margin:0; list-style:none}
+.facts li{position:relative; padding-left:18px; font-size:15px}
+.facts li::before{content:""; position:absolute; left:2px; top:.72em; width:7px; height:7px; border-radius:50%; background:var(--amber)}
+.dataset{display:grid; gap:10px}
+.dataset > .tag{justify-self:start; font-family:var(--mono); font-size:12px; letter-spacing:.06em; color:var(--ink-2); border:1px solid var(--rule-strong); border-radius:3px; padding:1px 8px}
+.twocol{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px}
+td.hl{color:var(--accent-ink); font-weight:600}
+tr.sum td{font-weight:600; background:var(--surface-2)}
+
+/* svg 新增类 */
+.seg-0{fill:var(--surface-2); stroke:var(--rule-strong)}
+.seg-1{fill:var(--rule); stroke:var(--rule-strong)}
+.seg-acc{fill:var(--accent); stroke:var(--accent)}
+.seg-r{fill:var(--amber-soft); stroke:var(--amber)}
+.lbl-on{fill:var(--surface); font-size:11.5px; font-weight:600}
+.bar{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1}
+.bar-mut{fill:var(--surface-2); stroke:var(--rule-strong); stroke-width:1}
+.bar-root{fill:var(--surface-2); stroke:var(--ink-2); stroke-width:1.2}
+.bar-dash{fill:none; stroke:var(--muted); stroke-width:1; stroke-dasharray:3 2}
+.bar-amber{fill:var(--amber-soft); stroke:var(--amber); stroke-width:1}
+.bar-red{fill:var(--red-soft); stroke:var(--red); stroke-width:1}
+.band{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1}
+.shade{fill:var(--red-soft); opacity:.75}
+.hatch{fill:var(--surface-2); opacity:.9}
+.chip-acc{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1}
+.chip-amber{fill:var(--amber-soft); stroke:var(--amber); stroke-width:1}
+.pt-red{fill:var(--red); stroke:var(--surface); stroke-width:1.5}
+.pt-ghost{fill:var(--surface); stroke:var(--rule-strong); stroke-width:1.5; stroke-dasharray:2 2}
+.phone-body{fill:var(--surface-2); stroke:var(--ink-2); stroke-width:1.4}
+.phone-screen{fill:var(--surface); stroke:var(--rule-strong); stroke-width:1}
+.skel{fill:var(--rule)}
+@media print{
+  figure svg.wide{min-width:0}
+  .term{font-size:9.5pt; padding:8px 10px}
+  .dataset{break-inside:avoid}
+  .act-body{display:block}
+  .act-body > * + *{margin-top:14px}
+  .question{display:block; padding-top:14px; margin-top:0}
+  .question > * + *{margin-top:8px}
+  .question .pill{position:static; display:inline-block}
+  .dataset{display:block}
+  .dataset > * + *{margin-top:8px}
+}
+
+/* ---------- 思考题 3 新增 ---------- */
+:root{--s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--s1:#3987e5; --s2:#d95926; --s3:#199e70}
+}
+:root[data-theme="dark"]{--s1:#3987e5; --s2:#d95926; --s3:#199e70}
+@media print{
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"]{--s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a}
+}
+.s1{fill:var(--s1)} .s2{fill:var(--s2)} .s3{fill:var(--s3)}
+.stk{stroke:var(--surface); stroke-width:2}
+.legend{display:flex; flex-wrap:wrap; gap:6px 18px; font-size:13px; color:var(--ink-2); margin:0; padding:0; list-style:none}
+.legend li{display:flex; align-items:center; gap:6px}
+.legend .sw{width:12px; height:12px; border-radius:2px; display:inline-block}
+.legend .sw.s1{background:var(--s1)} .legend .sw.s2{background:var(--s2)} .legend .sw.s3{background:var(--s3)}
+.legend .ln-sw{width:18px; height:0; border-top:2px solid var(--accent); display:inline-block}
+.opts{display:grid; gap:10px; padding:0; margin:0; list-style:none}
+.opts li{display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:start; padding:12px 14px; background:var(--surface); border:1px solid var(--rule); font-size:15px}
+.opts .k{font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent-ink); border:1px solid var(--accent); border-radius:3px; padding:1px 7px; margin-top:3px; white-space:nowrap}
+.node{fill:var(--surface); stroke:var(--ink-2); stroke-width:1.2}
+.node-q{fill:var(--surface); stroke:var(--rule-strong); stroke-width:1.2; stroke-dasharray:5 4}
+.cluster{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1.2}
+.host{fill:var(--surface-2); stroke:var(--ink-2); stroke-width:1.2}
+.host-bad{fill:var(--red-soft); stroke:var(--red); stroke-width:1.4}
+.vm{fill:var(--surface); stroke:var(--ink-2); stroke-width:1}
+.vm-bad{fill:var(--surface); stroke:var(--red); stroke-width:1.2; stroke-dasharray:4 3}
+.part{fill:var(--amber-soft); stroke:var(--amber); stroke-width:1}
+.lbl-in{fill:var(--ink); font-size:11.5px; font-weight:600}
+.wrap1 td:first-child{white-space:normal; min-width:11em}
+.tight th.n,.tight td.n{padding-inline:8px}
+@media print{
+  .opts li{break-inside:avoid; padding:8px 10px}
+  .legend{font-size:9.5pt}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ icon sprite ============ -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-server" viewBox="0 0 48 64">
+      <rect x="4" y="2" width="40" height="60" rx="4" class="ic-fill"/>
+      <rect x="10" y="10" width="28" height="8" rx="2" class="ic-slot"/>
+      <rect x="10" y="24" width="28" height="8" rx="2" class="ic-slot"/>
+      <rect x="10" y="38" width="28" height="8" rx="2" class="ic-slot"/>
+      <circle cx="14" cy="55" r="2.4" class="ic-led"/>
+      <circle cx="21" cy="55" r="2.4" class="ic-led2"/>
+    </symbol>
+    <symbol id="i-db" viewBox="0 0 64 64">
+      <path d="M10 14v36c0 5 10 9 22 9s22-4 22-9V14" class="ic-fill"/>
+      <ellipse cx="32" cy="14" rx="22" ry="8" class="ic-fill"/>
+      <path d="M10 26c0 5 10 9 22 9s22-4 22-9M10 38c0 5 10 9 22 9s22-4 22-9" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-laptop" viewBox="0 0 64 48">
+      <rect x="8" y="3" width="48" height="33" rx="3" class="ic-fill"/>
+      <rect x="12" y="7" width="40" height="25" rx="1.5" class="ic-screen"/>
+      <rect x="14" y="9.5" width="36" height="4" rx="1" class="ic-slot"/>
+      <path d="M2 40h60l-3 5H5z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-phone" viewBox="0 0 32 56">
+      <rect x="3" y="2" width="26" height="52" rx="5" class="ic-fill"/>
+      <rect x="6" y="8" width="20" height="38" rx="1.5" class="ic-screen"/>
+      <circle cx="16" cy="50" r="2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-person" viewBox="0 0 32 40">
+      <circle cx="16" cy="9" r="7" class="ic-fill"/>
+      <path d="M3 39c0-10 6-17 13-17s13 7 13 17z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-crowd" viewBox="0 0 64 44">
+      <use href="#i-person" x="0" y="6" width="26" height="32"/>
+      <use href="#i-person" x="38" y="6" width="26" height="32"/>
+      <use href="#i-person" x="17" y="0" width="30" height="38"/>
+    </symbol>
+    <symbol id="i-lb" viewBox="0 0 64 48">
+      <rect x="2" y="4" width="60" height="40" rx="6" class="ic-fill"/>
+      <path d="M12 24h14M26 24l14-10h12M26 24h26M26 24l14 10h12" class="ic-stroke"/>
+      <circle cx="12" cy="24" r="3" class="ic-dot"/>
+      <circle cx="53" cy="14" r="2.5" class="ic-dot"/><circle cx="53" cy="24" r="2.5" class="ic-dot"/><circle cx="53" cy="34" r="2.5" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="20" class="ic-fill"/>
+      <path d="M24 24V10M24 24H12" class="ic-stroke-b"/>
+      <circle cx="24" cy="24" r="2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 40 48">
+      <path d="M11 20v-7a9 9 0 0 1 18 0v7" class="ic-stroke-b"/>
+      <rect x="5" y="20" width="30" height="24" rx="4" class="ic-fill"/>
+      <circle cx="20" cy="30" r="3" class="ic-dot"/><path d="M20 32v6" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-log" viewBox="0 0 40 48">
+      <path d="M6 4h20l8 8v32H6z" class="ic-fill"/>
+      <path d="M26 4v8h8" class="ic-stroke"/>
+      <path d="M12 21h16M12 28h16M12 35h10" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-pulse" viewBox="0 0 64 32">
+      <path d="M2 18h12l6-12 8 22 8-16 4 6h22" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-gauge" viewBox="0 0 48 32">
+      <path d="M4 28a20 20 0 0 1 40 0" class="ic-stroke"/>
+      <path d="M24 28L34 12" class="ic-stroke-b"/>
+      <circle cx="24" cy="28" r="3" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-warn" viewBox="0 0 48 44">
+      <path d="M24 3L46 41H2z" class="ic-fill"/>
+      <path d="M24 16v13" class="ic-stroke-b"/><circle cx="24" cy="35" r="2.2" class="ic-dot"/>
+    </symbol>
+    <symbol id="i-spin" viewBox="0 0 32 32">
+      <path d="M16 3A13 13 0 1 1 3 16" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-wrench" viewBox="0 0 40 40">
+      <path d="M27 4a9 9 0 0 0-9 12L5 29a3 3 0 0 0 4 4l13-13a9 9 0 0 0 12-9l-5 5-5-1-1-5z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-power" viewBox="0 0 32 32">
+      <path d="M10 9a10 10 0 1 0 12 0" class="ic-stroke-b"/><path d="M16 3v12" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-bubble" viewBox="0 0 48 40">
+      <path d="M4 4h40v24H18l-8 8v-8H4z" class="ic-fill"/>
+    </symbol>
+  
+    <symbol id="i-cloud" viewBox="0 0 64 44">
+      <path d="M17 40h31a11 11 0 0 0 2-21.8A15 15 0 0 0 21 14a12 12 0 0 0-4 26z" class="ic-fill"/>
+      <path d="M22 30h20M26 24h12" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-queue" viewBox="0 0 64 36">
+      <rect x="2" y="5" width="60" height="26" rx="13" class="ic-fill"/>
+      <rect x="12" y="11" width="9" height="14" rx="2" class="ic-slot"/>
+      <rect x="25" y="11" width="9" height="14" rx="2" class="ic-slot"/>
+      <rect x="38" y="11" width="9" height="14" rx="2" class="ic-slot"/>
+      <path d="M51 18h6" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 40 40">
+      <circle cx="17" cy="17" r="12" class="ic-fill"/><path d="M26 26l10 10" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-cube" viewBox="0 0 44 44">
+      <path d="M22 3l18 9v20l-18 9-18-9V12z" class="ic-fill"/><path d="M4 12l18 9 18-9M22 21v20" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-spark" viewBox="0 0 40 40">
+      <path d="M20 3c1.6 9.2 4.8 13.4 14 15-9.2 1.6-12.4 5.8-14 15-1.6-9.2-4.8-13.4-14-15 9.2-1.6 12.4-5.8 14-15z" class="ic-fill"/>
+      <path d="M33 4v6M30 7h6" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-star" viewBox="0 0 40 40">
+      <path d="M20 3l5.2 10.9 11.8 1.5-8.7 8.2 2.2 11.8L20 29.6 9.5 35.4l2.2-11.8L3 15.4l11.8-1.5z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-bolt" viewBox="0 0 32 40">
+      <path d="M19 2L5 23h10l-3 15 15-22H17z" class="ic-fill"/>
+    </symbol>
+    <symbol id="i-env" viewBox="0 0 44 32">
+      <rect x="2" y="3" width="40" height="26" rx="3" class="ic-fill"/><path d="M3 5l19 14L41 5" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-dc" viewBox="0 0 56 56">
+      <path d="M8 54V10l20-7 20 7v44z" class="ic-fill"/>
+      <rect x="15" y="16" width="8" height="6" class="ic-slot"/><rect x="33" y="16" width="8" height="6" class="ic-slot"/>
+      <rect x="15" y="27" width="8" height="6" class="ic-slot"/><rect x="33" y="27" width="8" height="6" class="ic-slot"/>
+      <rect x="15" y="38" width="8" height="6" class="ic-slot"/><rect x="33" y="38" width="8" height="6" class="ic-slot"/>
+      <path d="M2 54h52" class="ic-stroke"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="13" class="ic-fill"/><path d="M10 16.5l4 4 8-9" class="ic-stroke-b"/>
+    </symbol>
+    <symbol id="i-gate" viewBox="0 0 110 100">
+      <path d="M4 10h102L66 50v32l-22 12V50z" class="ic-fill"/>
+      <path d="M22 22h66M36 34h38" class="ic-stroke"/>
+    </symbol>
+  </defs>
+</svg>
+<div class="page">
+
+<header class="masthead">
+  <div class="eyebrow">
+    <span>互联网产品开发与运维 · 2026 秋</span>
+    <span class="tag">思考题 3</span>
+    <span class="tag">M5 · 总评 10%</span>
+  </div>
+  <h1>42 台机器，一个集群</h1>
+  <p class="sub">还是思考题 2 里那个三年后的平台，你们仍是它的架构组。主任要求下一学年的机器费用降下来，架构组提出把应用服务和离线推荐迁入一个容器集群。每一幕结束时都有人来问你们一个问题，你们要用这一幕的数据回答。</p>
+  <dl class="meta">
+    <div><dt>发布</dt><dd><span class="num">2026-11-06</span> 周五</dd></div>
+    <div><dt>截止</dt><dd><span class="num">2026-11-13</span> 周五 <span class="num">23:59</span></dd></div>
+    <div><dt>形式</dt><dd>小组完成 · Markdown</dd></div>
+    <div><dt>提交</dt><dd>同思考题 1、2</dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="目录">
+  <a href="#bg">背景</a>
+  <a href="#act1">一 · 配额</a>
+  <a href="#act2">二 · 混部</a>
+  <a href="#act3">三 · 放置</a>
+  <a href="#act4">四 · 伸缩</a>
+  <a href="#act5">五 · 账本</a>
+  <a href="#req" class="q">作答要求</a>
+  <a href="#rubric" class="q">评分</a>
+  <a href="#refs" class="q">参考</a>
+</nav>
+
+<!-- ============ 背景 ============ -->
+<section class="block" id="bg">
+  <div class="h-row"><span class="kicker">SCENE 0</span><h2>背景</h2></div>
+  <div class="prose">
+    <p class="lead">本题接着思考题 2：还是那个三年后的"教务一站式平台"，你们仍是它的<strong>架构组</strong>。上次评审过后，主任又提了一个要求：<strong>下一学年的机器费用要降下来。</strong></p>
+    <p>监控上有两组数字支持这个要求：普通工作日各服务的 CPU 利用率只有 <span class="num">20%～45%</span>；离线推荐的 <span class="num">8</span> 台机器每晚只用约 <span class="num">2</span> 小时，其余时间闲着。架构组于是提出：把应用服务和离线推荐<strong>迁入一个容器集群</strong>，在线与离线混部，在线服务按流量自动伸缩。下面五幕是迁移前后遇到的五件事，每一幕结束时都有人来问你们一个问题。</p>
+    <p>题中的数字均为题目设定，已做简化，量级可以当真。本题的平台与讲义 L-07～L-13 课程实践中的小平台是两个不同阶段，数字不要混用。</p>
+    <ul>
+      <li>平台规模沿用思考题 2：全校 <span class="num">5</span> 万名学生；<span class="num">13</span> 个应用服务共 <span class="num">34</span> 个实例，迁移前每个实例独占一台 <span class="num">4</span> 核 <span class="num">8</span> GB 的云主机；离线推荐每晚 2:00 用 <span class="num">8</span> 台 <span class="num">8</span> 核 <span class="num">32</span> GB 的机器跑约 <span class="num">2</span> 小时；数据层有 MySQL 一主两从、Redis、Kafka ×3、Elasticsearch ×3。</li>
+      <li>迁移范围：13 个应用服务和离线推荐。API 网关和数据层暂不迁移（第五幕再讨论）。</li>
+      <li>集群的节点统一为 <strong><span class="num">32</span> 核 <span class="num">64</span> GB</strong> 的云主机。资源的写法沿用 L-09：request、limit、QoS。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 270" role="img" aria-label="左边是迁移前：34 台 4 核 8 GB 的云主机，每个应用实例独占一台；8 台 8 核 32 GB 的离线推荐机器，每晚约 2 小时。右边是迁移后的容器集群，节点为 32 核 64 GB，节点数待第二幕计算；API 网关与数据层不迁移。"><defs><marker id="m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker></defs><text x="20" y="24" class="lbl lbl-b">迁移前 · 42 台</text><use href="#i-server" x="20" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="46" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="72" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="98" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="124" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="150" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="176" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="202" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="228" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="254" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="280" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="306" y="40" width="20" height="27" class="u-muted"/><use href="#i-server" x="20" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="46" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="72" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="98" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="124" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="150" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="176" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="202" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="228" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="254" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="280" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="306" y="80" width="20" height="27" class="u-muted"/><use href="#i-server" x="20" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="46" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="72" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="98" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="124" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="150" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="176" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="202" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="228" y="120" width="20" height="27" class="u-muted"/><use href="#i-server" x="254" y="120" width="20" height="27" class="u-muted"/><text x="20" y="172" class="lbl-s">34 台 4 核 8 GB · 每个应用实例独占一台</text><use href="#i-server" x="20" y="186" width="30" height="40" class="u-amber"/><use href="#i-server" x="58" y="186" width="30" height="40" class="u-amber"/><use href="#i-server" x="96" y="186" width="30" height="40" class="u-amber"/><use href="#i-server" x="134" y="186" width="30" height="40" class="u-amber"/><use href="#i-server" x="172" y="186" width="30" height="40" class="u-amber"/><use href="#i-server" x="210" y="186" width="30" height="40" class="u-amber"/><use href="#i-server" x="248" y="186" width="30" height="40" class="u-amber"/><use href="#i-server" x="286" y="186" width="30" height="40" class="u-amber"/><text x="20" y="244" class="lbl-s">8 台 8 核 32 GB · 离线推荐，每晚 2:00 起约 2 小时</text><line x1="340" y1="140" x2="392" y2="140" class="ln" marker-end="url(#m0)"/><text x="366" y="130" text-anchor="middle" class="lbl-s">迁移</text><rect x="400" y="12" width="344" height="186" rx="10" class="cluster"/><text x="414" y="34" class="lbl lbl-b">迁移后 · 一个容器集群</text><text x="414" y="52" class="lbl-s">节点统一为 32 核 64 GB · 在线与离线混部</text><rect x="414" y="66" width="72" height="96" rx="6" class="node-q"/><text x="450" y="120" text-anchor="middle" class="lbl-m">节点</text><rect x="496" y="66" width="72" height="96" rx="6" class="node-q"/><text x="532" y="120" text-anchor="middle" class="lbl-m">节点</text><rect x="578" y="66" width="72" height="96" rx="6" class="node-q"/><text x="614" y="120" text-anchor="middle" class="lbl-m">节点</text><rect x="660" y="66" width="72" height="96" rx="6" class="node-q"/><text x="696" y="120" text-anchor="middle" class="lbl-m">节点</text><text x="572" y="186" text-anchor="middle" class="lbl-acc">需要几个节点？第二幕计算</text><rect x="400" y="212" width="344" height="48" rx="6" class="chip"/><text x="414" y="232" class="lbl-s">不迁移（第五幕再讨论）</text><text x="414" y="250" class="lbl-m">API 网关 · MySQL 一主两从 · Redis · Kafka ×3 · Elasticsearch ×3</text></svg>
+    </div>
+    <figcaption><b>迁移前后。</b>左边是迁移前的 42 台机器：每个应用实例独占一台云主机，离线推荐另用 8 台。右边是迁移后的容器集群，节点规格已定，节点数是第二幕要你们算的。</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 第一幕 ============ -->
+<section class="act" id="act1">
+  <div class="numeral" aria-hidden="true">1</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 1</span>
+    <h2>配额</h2>
+    <p class="leads">引出 <b>问题 1 · 配额该定多少，按什么定</b></p>
+  </header>
+
+  <div class="prose"><p>迁入集群的第一周出了两件事。</p></div>
+
+  <div class="dataset">
+    <span class="tag">① 冲突检测服务（Go）</span>
+    <ul class="facts">
+      <li>迁移时按"平均用量加余量"设了 CPU：request <span class="num">1.5</span> 核、limit <span class="num">2</span> 核。监控显示它平均只用约 <span class="num">1.4</span> 核。</li>
+      <li>节点是 <span class="num">32</span> 核。这个服务用两年前的 Go 版本编译，启动时 GOMAXPROCS 取节点的核数，即 <span class="num">32</span>。业务高峰时，同一时刻在运行的线程常常有 <span class="num">32</span> 个左右。</li>
+      <li>高峰时，它的 <code>cpu.stat</code> 显示 <code>nr_throttled ÷ nr_periods</code> 约 <span class="num">85%</span>；冲突检测的 p99 从迁移前的 <span class="num">120</span> ms 升到约 <span class="num">300</span> ms。</li>
+      <li>有人提议："把 limit 加到 4 核就好了。"</li>
+    </ul>
+  </div>
+
+  <div class="dataset">
+    <span class="tag">② 推荐服务（Java）</span>
+    <ul class="facts">
+      <li><span class="num">4</span> 个实例，只设了内存 limit <span class="num">3</span> GB；平时 RSS 约 <span class="num">2.6</span> GB。</li>
+      <li>同一周，前一晚的离线推荐作业失败了。推荐服务和思考题 2 第四幕一样切换到实时计算：每个在途请求另占约 <span class="num">40</span> MB 内存，线程池的 <span class="num">50</span> 个线程很快全部占满。</li>
+      <li>随后几分钟里，推荐服务的实例反复出现 OOMKilled（退出码 137）、重启、再被杀。</li>
+    </ul>
+    <div class="prose"><p class="sub-note">为便于计算，1 GB 按 1000 MB 计。</p></div>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 232" role="img" aria-label="左边：32 核的节点上，冲突检测容器的 CPU request 1.5 核、limit 2 核，GOMAXPROCS 为 32，高峰时约 32 个线程同时在跑；平均用 1.4 核，节流周期占比约 85%，p99 从 120 毫秒升到约 300 毫秒。右边：推荐服务平时 RSS 2.6 GB，内存 limit 3 GB；切换到实时计算后每个在途请求另占约 40 MB。"><text x="20" y="22" class="lbl lbl-b">① 冲突检测 · 节点 32 核</text><rect x="20" y="34" width="340" height="170" rx="8" class="host"/><rect x="40" y="62" width="300" height="124" rx="6" class="node"/><text x="52" y="82" class="lbl-s">容器 · request 1.5 核 · limit 2 核</text><line x1="56" y1="100" x2="56" y2="124" class="ln-acc"/><line x1="73" y1="100" x2="73" y2="124" class="ln-acc"/><line x1="90" y1="100" x2="90" y2="124" class="ln-acc"/><line x1="107" y1="100" x2="107" y2="124" class="ln-acc"/><line x1="124" y1="100" x2="124" y2="124" class="ln-acc"/><line x1="141" y1="100" x2="141" y2="124" class="ln-acc"/><line x1="158" y1="100" x2="158" y2="124" class="ln-acc"/><line x1="175" y1="100" x2="175" y2="124" class="ln-acc"/><line x1="192" y1="100" x2="192" y2="124" class="ln-acc"/><line x1="209" y1="100" x2="209" y2="124" class="ln-acc"/><line x1="226" y1="100" x2="226" y2="124" class="ln-acc"/><line x1="243" y1="100" x2="243" y2="124" class="ln-acc"/><line x1="260" y1="100" x2="260" y2="124" class="ln-acc"/><line x1="277" y1="100" x2="277" y2="124" class="ln-acc"/><line x1="294" y1="100" x2="294" y2="124" class="ln-acc"/><line x1="311" y1="100" x2="311" y2="124" class="ln-acc"/><line x1="56" y1="134" x2="56" y2="158" class="ln-acc"/><line x1="73" y1="134" x2="73" y2="158" class="ln-acc"/><line x1="90" y1="134" x2="90" y2="158" class="ln-acc"/><line x1="107" y1="134" x2="107" y2="158" class="ln-acc"/><line x1="124" y1="134" x2="124" y2="158" class="ln-acc"/><line x1="141" y1="134" x2="141" y2="158" class="ln-acc"/><line x1="158" y1="134" x2="158" y2="158" class="ln-acc"/><line x1="175" y1="134" x2="175" y2="158" class="ln-acc"/><line x1="192" y1="134" x2="192" y2="158" class="ln-acc"/><line x1="209" y1="134" x2="209" y2="158" class="ln-acc"/><line x1="226" y1="134" x2="226" y2="158" class="ln-acc"/><line x1="243" y1="134" x2="243" y2="158" class="ln-acc"/><line x1="260" y1="134" x2="260" y2="158" class="ln-acc"/><line x1="277" y1="134" x2="277" y2="158" class="ln-acc"/><line x1="294" y1="134" x2="294" y2="158" class="ln-acc"/><line x1="311" y1="134" x2="311" y2="158" class="ln-acc"/><text x="190" y="178" text-anchor="middle" class="lbl-acc">GOMAXPROCS = 32 · 高峰时约 32 个线程同时在跑</text><text x="190" y="222" text-anchor="middle" class="lbl-m">平均 1.4 核 · nr_throttled ÷ nr_periods ≈ 85% · p99 120 → 300 ms</text><text x="410" y="22" class="lbl lbl-b">② 推荐服务 · 内存</text><line x1="410" y1="150" x2="740.0" y2="150" class="axis"/><line x1="410.0" y1="150" x2="410.0" y2="155" class="axis"/><text x="410.0" y="168" text-anchor="middle" class="lbl-m lbl-mono">0 GB</text><line x1="470.0" y1="150" x2="470.0" y2="155" class="axis"/><text x="470.0" y="168" text-anchor="middle" class="lbl-m lbl-mono">1 GB</text><line x1="530.0" y1="150" x2="530.0" y2="155" class="axis"/><text x="530.0" y="168" text-anchor="middle" class="lbl-m lbl-mono">2 GB</text><line x1="590.0" y1="150" x2="590.0" y2="155" class="axis"/><text x="590.0" y="168" text-anchor="middle" class="lbl-m lbl-mono">3 GB</text><line x1="650.0" y1="150" x2="650.0" y2="155" class="axis"/><text x="650.0" y="168" text-anchor="middle" class="lbl-m lbl-mono">4 GB</text><line x1="710.0" y1="150" x2="710.0" y2="155" class="axis"/><text x="710.0" y="168" text-anchor="middle" class="lbl-m lbl-mono">5 GB</text><rect x="410" y="92" width="156.0" height="40" class="bar"/><text x="418" y="117" class="lbl-acc">平时 RSS 2.6 GB</text><rect x="566.0" y="92" width="156.0" height="40" class="bar-dash"/><text x="596.0" y="117" class="lbl-m">+40 MB × 在途请求</text><text x="722.0" y="84" text-anchor="end" class="lbl-m">虚线框：切换到实时计算后</text><line x1="590.0" y1="60" x2="590.0" y2="146" class="ln-red dash"/><text x="590.0" y="54" text-anchor="middle" class="lbl-red">limit 3 GB</text><text x="410" y="196" class="lbl-s">线程池 50 个线程全部占满时 RSS 到多少？</text><text x="410" y="214" class="lbl-m">虚线框的长度只是示意，不按比例</text></svg>
+    </div>
+    <figcaption><b>两件事的现场。</b>左边是冲突检测的容器：配额只有 2 核，同时在跑的线程却有 32 个。右边是推荐服务的内存：平时离 limit 还有 0.4 GB。一个 100 ms 的周期里每个线程能跑多久，实时计算时 RSS 会涨到多少，留给你们来算。</figcaption>
+  </figure>
+
+  <div class="prose"><p>运维组的同事有些沮丧：</p></div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>运维组同事</span></div>
+    <div><p>"迁移前好好的，一进容器就又慢又被杀。"</p><p>"是不是容器不靠谱，还是退回云主机吧？"</p></div>
+  </blockquote>
+
+  <div class="question">
+    <span class="pill">问题 1</span>
+    <h3>配额该定多少，按什么定？</h3>
+    <ol type="a">
+      <li>冲突检测：limit 2 核、32 个线程同时忙时，一个 100 ms 的周期里每个线程能运行多久、被停多久？limit 加到 4 核呢？据此说明"加 limit"为什么治不了，应该改什么，改了以后又有什么代价。平均只用 1.4 核，为什么还会被节流？</li>
+      <li>推荐服务：算出实时计算、线程池占满时的 RSS。给出两种改法并算出数值：一种按最坏的运行模式定 limit（留约 10% 余量），算出 limit 和 4 个实例因此多占的内存；另一种不改 limit，限制实时计算的并发，算出最多允许几个，超出的请求怎么处理（思考题 2 第四幕）。两种改法各适合什么条件？</li>
+      <li>回答运维同事：这两件事在迁移前独占云主机时会怎样表现？迁移到底改变了什么？</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第二幕 ============ -->
+<section class="act" id="act2">
+  <div class="numeral" aria-hidden="true">2</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 2</span>
+    <h2>混部</h2>
+    <p class="leads">引出 <b>问题 2 · 混部省下了什么</b></p>
+  </header>
+
+  <div class="prose"><p>迁移前，架构组按服务分组统计了一个普通工作日各时段的 CPU 用量（每个时段内的峰值，单位：核）：</p></div>
+
+  <div class="tablewrap">
+    <table class="wrap1 tight">
+      <caption>普通工作日各时段的 CPU 用量 · 单位：核</caption>
+      <thead><tr><th>分组</th><th class="n">02 时</th><th class="n">08 时</th><th class="n">10 时</th><th class="n">14 时</th><th class="n">20 时</th><th class="n">23 时</th></tr></thead>
+      <tbody>
+        <tr><td>在线核心<br><span class="sub-note">用户、课表、余量、选课、冲突检测、先修校验</span></td><td class="n">8</td><td class="n">14</td><td class="n">40</td><td class="n">34</td><td class="n">28</td><td class="n">16</td></tr>
+        <tr><td>在线非核心<br><span class="sub-note">评教、推荐、公告、通知、搜索、AI 助手、审计</span></td><td class="n">4</td><td class="n">8</td><td class="n">22</td><td class="n">20</td><td class="n">26</td><td class="n">14</td></tr>
+        <tr><td>离线推荐<br><span class="sub-note">2:00 开始，约 2 小时</span></td><td class="n">56</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <ul class="legend" aria-hidden="true">
+      <li><span class="sw s1"></span>在线核心</li>
+      <li><span class="sw s2"></span>在线非核心</li>
+      <li><span class="sw s3"></span>离线推荐</li>
+    </ul>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 270" role="img" aria-label="普通工作日六个时段的 CPU 用量，按分组堆叠，单位为核。02 时：在线核心 8、在线非核心 4、离线推荐 56；08 时：14、8、0；10 时：40、22、0；14 时：34、20、0；20 时：28、26、0；23 时：16、14、0。数据与上表相同。"><line x1="70" y1="244.0" x2="710" y2="244.0" class="grid"/><text x="62" y="248.0" text-anchor="end" class="lbl-m lbl-mono">0</text><line x1="70" y1="189.0" x2="710" y2="189.0" class="grid"/><text x="62" y="193.0" text-anchor="end" class="lbl-m lbl-mono">20</text><line x1="70" y1="134.0" x2="710" y2="134.0" class="grid"/><text x="62" y="138.0" text-anchor="end" class="lbl-m lbl-mono">40</text><line x1="70" y1="79.0" x2="710" y2="79.0" class="grid"/><text x="62" y="83.0" text-anchor="end" class="lbl-m lbl-mono">60</text><line x1="70" y1="24.0" x2="710" y2="24.0" class="grid"/><text x="62" y="28.0" text-anchor="end" class="lbl-m lbl-mono">80</text><text x="14" y="18" class="lbl-m">核</text><rect x="95.3" y="222.0" width="56" height="22.0" class="s1 stk"><title>02 时 · 在线核心 8 核</title></rect><text x="123.3" y="237.0" text-anchor="middle" class="lbl-in lbl-mono">8</text><rect x="95.3" y="211.0" width="56" height="11.0" class="s2 stk"><title>02 时 · 在线非核心 4 核</title></rect><rect x="95.3" y="57.0" width="56" height="154.0" class="s3 stk"><title>02 时 · 离线推荐 56 核</title></rect><text x="123.3" y="138.0" text-anchor="middle" class="lbl-in lbl-mono">56</text><text x="123.3" y="262" text-anchor="middle" class="lbl-m">02 时</text><rect x="202.0" y="205.5" width="56" height="38.5" class="s1 stk"><title>08 时 · 在线核心 14 核</title></rect><text x="230.0" y="228.8" text-anchor="middle" class="lbl-in lbl-mono">14</text><rect x="202.0" y="183.5" width="56" height="22.0" class="s2 stk"><title>08 时 · 在线非核心 8 核</title></rect><text x="230.0" y="198.5" text-anchor="middle" class="lbl-in lbl-mono">8</text><text x="230.0" y="262" text-anchor="middle" class="lbl-m">08 时</text><rect x="308.7" y="134.0" width="56" height="110.0" class="s1 stk"><title>10 时 · 在线核心 40 核</title></rect><text x="336.7" y="193.0" text-anchor="middle" class="lbl-in lbl-mono">40</text><rect x="308.7" y="73.5" width="56" height="60.5" class="s2 stk"><title>10 时 · 在线非核心 22 核</title></rect><text x="336.7" y="107.8" text-anchor="middle" class="lbl-in lbl-mono">22</text><text x="336.7" y="262" text-anchor="middle" class="lbl-m">10 时</text><rect x="415.3" y="150.5" width="56" height="93.5" class="s1 stk"><title>14 时 · 在线核心 34 核</title></rect><text x="443.3" y="201.2" text-anchor="middle" class="lbl-in lbl-mono">34</text><rect x="415.3" y="95.5" width="56" height="55.0" class="s2 stk"><title>14 时 · 在线非核心 20 核</title></rect><text x="443.3" y="127.0" text-anchor="middle" class="lbl-in lbl-mono">20</text><text x="443.3" y="262" text-anchor="middle" class="lbl-m">14 时</text><rect x="522.0" y="167.0" width="56" height="77.0" class="s1 stk"><title>20 时 · 在线核心 28 核</title></rect><text x="550.0" y="209.5" text-anchor="middle" class="lbl-in lbl-mono">28</text><rect x="522.0" y="95.5" width="56" height="71.5" class="s2 stk"><title>20 时 · 在线非核心 26 核</title></rect><text x="550.0" y="135.2" text-anchor="middle" class="lbl-in lbl-mono">26</text><text x="550.0" y="262" text-anchor="middle" class="lbl-m">20 时</text><rect x="628.7" y="200.0" width="56" height="44.0" class="s1 stk"><title>23 时 · 在线核心 16 核</title></rect><text x="656.7" y="226.0" text-anchor="middle" class="lbl-in lbl-mono">16</text><rect x="628.7" y="161.5" width="56" height="38.5" class="s2 stk"><title>23 时 · 在线非核心 14 核</title></rect><text x="656.7" y="184.8" text-anchor="middle" class="lbl-in lbl-mono">14</text><text x="656.7" y="262" text-anchor="middle" class="lbl-m">23 时</text><line x1="70" y1="244" x2="710" y2="244" class="axis"/></svg>
+    </div>
+    <figcaption><b>同一张表，按时段堆叠。</b>每根柱子是一个时段三个分组的用量，数据与上表相同；鼠标停在色块上可以看到数值。峰值之和与合并峰值留给你们来算。</figcaption>
+  </figure>
+
+  <div class="dataset">
+    <span class="tag">内存</span>
+    <ul class="facts">
+      <li>在线的 <span class="num">34</span> 个实例，每个的内存 request = limit = <span class="num">4</span> GB。JVM 的堆长大后不归还，全天几乎不变。</li>
+      <li>离线推荐分成 <span class="num">8</span> 个任务并行，每个任务约 <span class="num">7</span> 核、<span class="num">24</span> GB，只在运行时占用。</li>
+    </ul>
+  </div>
+
+  <div class="prose">
+    <p>规划规则：CPU 按 L-07 的容量线（<span class="num">70%</span>）规划；内存不超卖（每个节点上的 Σlimit 不超过 <span class="num">64</span> GB）；忽略系统预留和碎片。</p>
+    <p>架构组的初稿写道："混部后 CPU 错峰，集群只要 4 个节点。"</p>
+    <p>初稿评审时，又有两件事需要考虑：</p>
+    <ul class="facts">
+      <li>有人提议：离线推荐改为 <span class="num">4</span> 个任务并行，跑约 <span class="num">4</span> 小时（02:00～06:00）。首页的推荐列表 8:00 之前更新即可。</li>
+      <li>迁移后的第三周，离线推荐在夜里失败，值班的同事第二天 10:00 手动重跑。</li>
+    </ul>
+    <p>主任看了初稿：</p>
+  </div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>教务处主任</span></div>
+    <div><p>"不是说混部能省下一大半机器吗？到底省了多少？"</p></div>
+  </blockquote>
+
+  <div class="question">
+    <span class="pill">问题 2</span>
+    <h3>混部省下了什么？</h3>
+    <ol type="a">
+      <li>算出三个分组的峰值之和与合并峰值。在线与离线分开部署和混部，按 CPU 各需几个节点？省下的 CPU 来自什么，成立的前提是什么？</li>
+      <li>按内存需要几个节点？初稿的"4 个节点"对吗？节点数由哪种资源决定，为什么 CPU 能错峰而内存不能？与迁移前 42 台机器的总核数、总内存比较，省了多少。</li>
+      <li>离线推荐改为 4 个任务并行后，按 CPU、按内存各需几个节点？代价是什么？如果改后作业失败、10:00 重跑：靠什么保证在线服务不受影响（L-09）？重跑应该开几个任务并行，为什么？推荐结果最早什么时候能更新，期间首页怎么办？</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第三幕 ============ -->
+<section class="act" id="act3">
+  <div class="numeral" aria-hidden="true">3</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 3</span>
+    <h2>放置</h2>
+    <p class="leads">引出 <b>问题 3 · 副本放在哪儿，才算真的冗余</b></p>
+  </header>
+
+  <div class="prose">
+    <p>Kafka 的 3 个 broker 不在集群里，各自运行在一台云主机上。主题的副本数为 3，<code>min.insync.replicas = 2</code>，生产者用 <code>acks=all</code>：同步的副本少于 2 个时，写入直接报错。写不进 Kafka 时，Outbox 投递程序（思考题 2 第三幕）就停下来，事件堆在 Outbox 表里；选课本身不受影响，但课表更新、短信和审计都要等。</p>
+    <p>迁移期间的一个晚上，一台物理宿主机硬件故障，云平台把它上面的云主机迁到别处，用了约 <span class="num">20</span> 分钟。这 20 分钟里，Kafka 有两个 broker 同时离线，Outbox 投递停了 20 分钟。排查发现：三台 Kafka 云主机创建时没有加入任何云服务器组，其中两台恰好落在同一台宿主机上。</p>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 220" role="img" aria-label="宿主机 A 上有两台云主机，分别运行 broker 1 和 broker 2，宿主机 A 发生硬件故障；宿主机 B 上的云主机运行 broker 3。每个主题 3 个副本，min.insync.replicas 为 2，生产者 acks 为 all：同步副本少于 2 个时写入报错，Outbox 投递停下。"><defs><marker id="m3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="mk-ink"/></marker></defs><text x="20" y="22" class="lbl lbl-b">三台 Kafka 云主机实际落在的宿主机</text><rect x="20" y="40" width="300" height="140" rx="8" class="host-bad"/><text x="34" y="62" class="lbl lbl-b" style="fill:var(--red)">宿主机 A · 硬件故障</text><rect x="40" y="78" width="120" height="80" rx="6" class="vm-bad"/><text x="100" y="112" text-anchor="middle" class="lbl">云主机</text><text x="100" y="132" text-anchor="middle" class="lbl-red lbl-mono">broker 1</text><rect x="180" y="78" width="120" height="80" rx="6" class="vm-bad"/><text x="240" y="112" text-anchor="middle" class="lbl">云主机</text><text x="240" y="132" text-anchor="middle" class="lbl-red lbl-mono">broker 2</text><rect x="360" y="40" width="160" height="140" rx="8" class="host"/><text x="374" y="62" class="lbl lbl-b">宿主机 B</text><rect x="380" y="78" width="120" height="80" rx="6" class="vm"/><text x="440" y="112" text-anchor="middle" class="lbl">云主机</text><text x="440" y="132" text-anchor="middle" class="lbl-s lbl-mono">broker 3</text><rect x="560" y="40" width="180" height="140" rx="8" class="chip"/><text x="574" y="64" class="lbl-s">每个主题 3 个副本</text><text x="574" y="84" class="lbl-s lbl-mono">min.insync.replicas = 2</text><text x="574" y="104" class="lbl-s lbl-mono">acks = all</text><text x="574" y="132" class="lbl-red">同步的副本少于 2 个：</text><text x="574" y="150" class="lbl-red">写入报错，Outbox 投递停下</text><text x="20" y="206" class="lbl-m">三台云主机创建时没有加入任何云服务器组；本幕只考虑宿主机故障，宿主机可用性按 99.5% 计</text></svg>
+    </div>
+    <figcaption><b>排查后画出的放置。</b>三台云主机里有两台在宿主机 A 上，A 一坏，三个副本里同时少了两个。</figcaption>
+  </figure>
+
+  <div class="dataset">
+    <span class="tag">其他数据（设定）</span>
+    <ul class="facts">
+      <li>宿主机的可用性按 <span class="num">99.5%</span> 计，各台相互独立；本幕只考虑宿主机故障。</li>
+      <li>同一可用区内 RTT 约 <span class="num">0.2</span> ms（思考题 2），跨可用区约 <span class="num">1.5</span> ms。</li>
+    </ul>
+  </div>
+
+  <div class="prose"><p>小林不解：</p></div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>实习生小林</span></div>
+    <div><p>"三个副本还不够吗？"</p><p>"以后给 Kafka 设一个反亲和不就行了？"</p></div>
+  </blockquote>
+
+  <div class="question">
+    <span class="pill">问题 3</span>
+    <h3>副本放在哪儿，才算真的冗余？</h3>
+    <ol type="a">
+      <li>算出两种放法下"至少 2 个 broker 存活"的概率：三台云主机分在三台宿主机上；两台在同一台宿主机上。各相当于每年约有多久写不进 Kafka？如果只算"至少 1 个 broker 存活"，会得出什么错误的结论？</li>
+      <li>回答小林：在容器集群里设置反亲和，能防住这次的故障吗？反亲和应该设在哪一层、用什么手段（L-10）？再往上一层（机架、可用区）分别防的是什么？用题中的 RTT 说明，三个副本分在三个可用区时，<code>acks=all</code> 的每次写入至少多等多久，还有什么代价？</li>
+      <li>迁移以后，34 个在线实例由调度器放置。冗余可能在哪些地方不知不觉地失效？举至少两例（可以来自本题其他幕或 L-10），并说明上线前怎样发现。</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第四幕 ============ -->
+<section class="act" id="act4">
+  <div class="numeral" aria-hidden="true">4</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 4</span>
+    <h2>伸缩</h2>
+    <p class="leads">引出 <b>问题 4 · 伸缩赶得上开放日吗</b></p>
+  </header>
+
+  <div class="prose"><p>迁移后的第一个开放日，余量服务按流量自动伸缩。伸缩的机制见 L-11，本幕需要的规则都写在下面：</p></div>
+
+  <div class="dataset">
+    <span class="tag">伸缩的规则</span>
+    <ul class="facts">
+      <li><strong>到达曲线</strong>：9:00:00 之前约 <span class="num">1500</span> QPS；9:00:00～9:00:20 线性升到 <span class="num">24000</span> QPS（思考题 2 第二幕的 2.4 万），之后一直维持到 9:10:20。</li>
+      <li><strong>实例能力</strong>：单个实例在容量线（<span class="num">70%</span>）下可承担 <span class="num">2000</span> QPS。平时保留 <span class="num">2</span> 个实例。</li>
+      <li><strong>伸缩器</strong>：每 <span class="num">15</span> 秒决策一次，决策时刻为 9:00:00、9:00:15、9:00:30……（之前同理）。决策时看到的是 <strong><span class="num">30</span> 秒前</strong>的到达 QPS（指标采集、聚合与上报的延迟）。期望实例数 = ⌈看到的到达 QPS ÷ 2000⌉，至少 2 个。期望数大于已有的实例数（含正在启动和 Pending 的）时，立刻创建差额；10:00 之前不缩容。这是 Kubernetes HPA 的公式"期望副本数 = ⌈当前副本数 × 当前指标 ÷ 目标值⌉"在指标取每实例 QPS 时的简化。</li>
+      <li><strong>实例启动</strong>：新实例从创建到就绪约 <span class="num">70</span> 秒（拉镜像 20 s、启动与预热 40 s、就绪检查 10 s）；就绪后负载均衡立即给它分流量。</li>
+      <li><strong>节点</strong>：节点池现在有 <span class="num">4</span> 个空位。空位不够时，Pending 的实例立刻触发加节点：新节点 <span class="num">3</span> 分钟后可用，每个可放 <span class="num">4</span> 个余量服务的实例；同一次决策触发的节点同时可用。</li>
+      <li><strong>缺口</strong>：到达 QPS 超过"就绪实例数 × 2000"的时段（排队、超时）。</li>
+      <li><strong>计费口径</strong>：实例·分钟从实例在节点上开始启动（拉镜像）时起算，到 9:10:20 止；节点本身的费用不计。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <ul class="legend" aria-hidden="true"><li><span class="ln-sw"></span>余量服务的到达 QPS</li></ul>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 270" role="img" aria-label="开放日余量服务的到达曲线：9:00:00 之前约每秒 1500 次请求，9:00:00 到 9:00:20 线性升到每秒 24000 次，之后一直维持到 9:10:20。横轴从 8:59 到 9:10，短刻度标出伸缩器每 15 秒一次的决策时刻。"><line x1="70" y1="220.0" x2="720" y2="220.0" class="grid"/><text x="62" y="224.0" text-anchor="end" class="lbl-m lbl-mono">0</text><line x1="70" y1="156.7" x2="720" y2="156.7" class="grid"/><text x="62" y="160.7" text-anchor="end" class="lbl-m lbl-mono">1 万</text><line x1="70" y1="93.3" x2="720" y2="93.3" class="grid"/><text x="62" y="97.3" text-anchor="end" class="lbl-m lbl-mono">2 万</text><line x1="70" y1="30.0" x2="720" y2="30.0" class="grid"/><text x="62" y="34.0" text-anchor="end" class="lbl-m lbl-mono">3 万</text><text x="14" y="22" class="lbl-m">QPS</text><polyline points="70.0,210.5 124.2,210.5 142.2,68.0 683.9,68.0" class="ln-acc-b"/><text x="485.3" y="60.0" text-anchor="middle" class="lbl-acc">到达 24000 QPS，维持到 9:10:20</text><text x="71.8" y="202.5" class="lbl-acc lbl-mono">1500</text><line x1="142.2" y1="30" x2="142.2" y2="220" class="ln-thin dots"/><text x="145.8" y="180" class="lbl-m lbl-mono">9:00:20</text><line x1="70.0" y1="220" x2="70.0" y2="224" class="axis"/><line x1="83.5" y1="220" x2="83.5" y2="224" class="axis"/><line x1="97.1" y1="220" x2="97.1" y2="224" class="axis"/><line x1="110.6" y1="220" x2="110.6" y2="224" class="axis"/><line x1="124.2" y1="220" x2="124.2" y2="224" class="axis"/><line x1="137.7" y1="220" x2="137.7" y2="224" class="axis"/><line x1="151.2" y1="220" x2="151.2" y2="224" class="axis"/><line x1="164.8" y1="220" x2="164.8" y2="224" class="axis"/><line x1="178.3" y1="220" x2="178.3" y2="224" class="axis"/><line x1="191.9" y1="220" x2="191.9" y2="224" class="axis"/><line x1="205.4" y1="220" x2="205.4" y2="224" class="axis"/><line x1="219.0" y1="220" x2="219.0" y2="224" class="axis"/><line x1="232.5" y1="220" x2="232.5" y2="224" class="axis"/><line x1="246.0" y1="220" x2="246.0" y2="224" class="axis"/><line x1="259.6" y1="220" x2="259.6" y2="224" class="axis"/><line x1="273.1" y1="220" x2="273.1" y2="224" class="axis"/><line x1="286.7" y1="220" x2="286.7" y2="224" class="axis"/><line x1="300.2" y1="220" x2="300.2" y2="224" class="axis"/><line x1="313.8" y1="220" x2="313.8" y2="224" class="axis"/><line x1="327.3" y1="220" x2="327.3" y2="224" class="axis"/><line x1="340.8" y1="220" x2="340.8" y2="224" class="axis"/><line x1="354.4" y1="220" x2="354.4" y2="224" class="axis"/><line x1="367.9" y1="220" x2="367.9" y2="224" class="axis"/><line x1="381.5" y1="220" x2="381.5" y2="224" class="axis"/><line x1="395.0" y1="220" x2="395.0" y2="224" class="axis"/><line x1="408.5" y1="220" x2="408.5" y2="224" class="axis"/><line x1="422.1" y1="220" x2="422.1" y2="224" class="axis"/><line x1="435.6" y1="220" x2="435.6" y2="224" class="axis"/><line x1="449.2" y1="220" x2="449.2" y2="224" class="axis"/><line x1="462.7" y1="220" x2="462.7" y2="224" class="axis"/><line x1="476.2" y1="220" x2="476.2" y2="224" class="axis"/><line x1="489.8" y1="220" x2="489.8" y2="224" class="axis"/><line x1="503.3" y1="220" x2="503.3" y2="224" class="axis"/><line x1="516.9" y1="220" x2="516.9" y2="224" class="axis"/><line x1="530.4" y1="220" x2="530.4" y2="224" class="axis"/><line x1="544.0" y1="220" x2="544.0" y2="224" class="axis"/><line x1="557.5" y1="220" x2="557.5" y2="224" class="axis"/><line x1="571.0" y1="220" x2="571.0" y2="224" class="axis"/><line x1="584.6" y1="220" x2="584.6" y2="224" class="axis"/><line x1="598.1" y1="220" x2="598.1" y2="224" class="axis"/><line x1="611.7" y1="220" x2="611.7" y2="224" class="axis"/><line x1="625.2" y1="220" x2="625.2" y2="224" class="axis"/><line x1="638.8" y1="220" x2="638.8" y2="224" class="axis"/><line x1="652.3" y1="220" x2="652.3" y2="224" class="axis"/><line x1="665.8" y1="220" x2="665.8" y2="224" class="axis"/><line x1="679.4" y1="220" x2="679.4" y2="224" class="axis"/><line x1="692.9" y1="220" x2="692.9" y2="224" class="axis"/><line x1="706.5" y1="220" x2="706.5" y2="224" class="axis"/><line x1="720.0" y1="220" x2="720.0" y2="224" class="axis"/><line x1="70.0" y1="220" x2="70.0" y2="228" class="axis"/><text x="70.0" y="242" text-anchor="middle" class="lbl-m lbl-mono">8:59</text><line x1="124.2" y1="220" x2="124.2" y2="228" class="axis"/><text x="124.2" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:00</text><line x1="178.3" y1="220" x2="178.3" y2="228" class="axis"/><text x="178.3" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:01</text><line x1="232.5" y1="220" x2="232.5" y2="228" class="axis"/><text x="232.5" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:02</text><line x1="286.7" y1="220" x2="286.7" y2="228" class="axis"/><text x="286.7" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:03</text><line x1="340.8" y1="220" x2="340.8" y2="228" class="axis"/><text x="340.8" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:04</text><line x1="395.0" y1="220" x2="395.0" y2="228" class="axis"/><text x="395.0" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:05</text><line x1="449.2" y1="220" x2="449.2" y2="228" class="axis"/><text x="449.2" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:06</text><line x1="503.3" y1="220" x2="503.3" y2="228" class="axis"/><text x="503.3" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:07</text><line x1="557.5" y1="220" x2="557.5" y2="228" class="axis"/><text x="557.5" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:08</text><line x1="611.7" y1="220" x2="611.7" y2="228" class="axis"/><text x="611.7" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:09</text><line x1="665.8" y1="220" x2="665.8" y2="228" class="axis"/><text x="665.8" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:10</text><line x1="720.0" y1="220" x2="720.0" y2="228" class="axis"/><text x="720.0" y="242" text-anchor="middle" class="lbl-m lbl-mono">9:11</text><line x1="70" y1="220" x2="720" y2="220" class="axis"/><text x="720" y="260" text-anchor="end" class="lbl-m">短刻度：伸缩器每 15 秒的决策时刻</text></svg>
+    </div>
+    <figcaption><b>开放日的到达曲线。</b>只画了需求；容量随实例就绪而变，这条线要你们按规则自己画。横轴上的短刻度是伸缩器的决策时刻。</figcaption>
+  </figure>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 180" role="img" aria-label="同一时间刻度上的三条：一个新实例从创建到就绪约 70 秒，其中拉镜像 20 秒、启动与预热 40 秒、就绪检查 10 秒；空位不够时先加节点约 3 分钟，再启动实例 70 秒；伸缩器看到的是 30 秒前的数据，每 15 秒决策一次。"><text x="140" y="35" text-anchor="end" class="lbl-s">一个新实例</text><rect x="150.0" y="16" width="47.2" height="28" class="seg-0"/><rect x="197.2" y="16" width="94.4" height="28" class="seg-1"/><rect x="291.6" y="16" width="23.6" height="28" class="seg-0"/><text x="325.2" y="35" class="lbl-s">拉镜像 20 s + 启动与预热 40 s + 就绪检查 10 s = 70 s</text><text x="140" y="79" text-anchor="end" class="lbl-s">空位不够时</text><rect x="150.0" y="60" width="424.8" height="28" class="bar-dash"/><text x="158.0" y="79" class="lbl-s">加节点 3 min</text><rect x="574.8" y="60" width="165.2" height="28" class="seg-1"/><text x="582.8" y="79" class="lbl-s">再启动实例 70 s</text><text x="140" y="123" text-anchor="end" class="lbl-s">伸缩器</text><rect x="150.0" y="104" width="70.8" height="28" class="bar-amber"/><rect x="220.8" y="104" width="35.4" height="28" class="bar-mut"/><text x="266.2" y="123" class="lbl-s">看到的是 30 s 前的数据；每 15 s 决策一次</text><line x1="150" y1="150" x2="740.0" y2="150" class="axis"/><line x1="150.0" y1="150" x2="150.0" y2="155" class="axis"/><text x="150.0" y="168" text-anchor="middle" class="lbl-m lbl-mono">0 s</text><line x1="220.8" y1="150" x2="220.8" y2="155" class="axis"/><text x="220.8" y="168" text-anchor="middle" class="lbl-m lbl-mono">30 s</text><line x1="291.6" y1="150" x2="291.6" y2="155" class="axis"/><text x="291.6" y="168" text-anchor="middle" class="lbl-m lbl-mono">60 s</text><line x1="362.4" y1="150" x2="362.4" y2="155" class="axis"/><text x="362.4" y="168" text-anchor="middle" class="lbl-m lbl-mono">90 s</text><line x1="433.2" y1="150" x2="433.2" y2="155" class="axis"/><text x="433.2" y="168" text-anchor="middle" class="lbl-m lbl-mono">120 s</text><line x1="504.0" y1="150" x2="504.0" y2="155" class="axis"/><text x="504.0" y="168" text-anchor="middle" class="lbl-m lbl-mono">150 s</text><line x1="574.8" y1="150" x2="574.8" y2="155" class="axis"/><text x="574.8" y="168" text-anchor="middle" class="lbl-m lbl-mono">180 s</text><line x1="645.6" y1="150" x2="645.6" y2="155" class="axis"/><text x="645.6" y="168" text-anchor="middle" class="lbl-m lbl-mono">210 s</text><line x1="716.4" y1="150" x2="716.4" y2="155" class="axis"/><text x="716.4" y="168" text-anchor="middle" class="lbl-m lbl-mono">240 s</text></svg>
+    </div>
+    <figcaption><b>控制环里的几段时间，按同一刻度。</b>它们怎么首尾相接，取决于每次决策时有没有空位。</figcaption>
+  </figure>
+
+  <div class="prose"><p>运维组拿出三个方案：</p></div>
+  <ul class="opts">
+    <li><span class="k">A</span><div><strong>反应式</strong>：只靠上面的伸缩器。</div></li>
+    <li><span class="k">B</span><div><strong>定时预热</strong>：8:50 把余量服务扩到 12 个（空位不够的部分同样要等加节点，规则同上），9:10:20 之后交还给伸缩器。</div></li>
+    <li><span class="k">C</span><div><strong>改按 CPU 伸缩</strong>：有人建议把指标换成 CPU 利用率，目标 70%，"这是最通用的指标"。CPU 利用率按"用量 ÷ request"计，余量服务的 request = limit，所以利用率最高 100%。</div></li>
+  </ul>
+
+  <div class="prose"><p>主任问：</p></div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>教务处主任</span></div>
+    <div><p>"自动伸缩不就是来多少流量就开多少机器吗？"</p><p>"为什么还要人提前去扩？"</p></div>
+  </blockquote>
+
+  <div class="question">
+    <span class="pill">问题 4</span>
+    <h3>伸缩赶得上开放日吗？</h3>
+    <ol type="a">
+      <li>按方案 A 的规则，写出 9:00:00 起的各次决策看到的 QPS、期望实例数和新建的实例（新建为 0 的决策可以略去），画出 8:59～9:06 的需求与容量时间线（横轴时间，纵轴 QPS），标出缺口何时开始、何时结束。控制环的延迟由哪几段组成，哪一段最长？</li>
+      <li>方案 B：如果要在 9:00:00 之前全部就绪，最晚几点开始？按计费口径，8:50 开始比方案 A 多花多少实例·分钟？以 (a) 的缺口为对照，你们选哪个方案？平时（不是开放日）出现无法预知的突发时，又该怎么办？</li>
+      <li>方案 C：按目标 70%，每次决策最多能扩到原来的几倍？从 2 个扩到 12 个，至少要决策几次？据此比较按 CPU 利用率、按到达 QPS、按在途请求数伸缩的优劣。最后回答主任。</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 第五幕 ============ -->
+<section class="act" id="act5">
+  <div class="numeral" aria-hidden="true">5</div>
+  <div class="act-body">
+  <header>
+    <span class="kicker">ACT 5</span>
+    <h2>账本</h2>
+    <p class="leads">引出 <b>问题 5 · 省在哪儿，花在哪儿，边界在哪儿</b></p>
+  </header>
+
+  <div class="dataset">
+    <span class="tag">① 课表消费者</span>
+    <div class="prose"><p>开放日 9:00:20，课表服务的 Kafka 消费者积压了约 <span class="num">1.2</span> 万条消息。它的工作是重新生成个人课表与日历文件，每条约 <span class="num">150</span> ms（思考题 2 第三幕）。消费者按积压（lag）自动伸缩，从 <span class="num">3</span> 个扩到了上限 <span class="num">20</span> 个，消化积压的速度却远没有跟着消费者的数量涨上去；当天"选课成功后课表里没有新课"的投诉比去年还多。已知：</p></div>
+    <ul class="facts">
+      <li>选课事件的主题有 <span class="num">6</span> 个分区。消费者属于同一个普通消费组：同一时刻，一个分区只分给组内的一个消费者；每个消费者单线程逐条处理，一次只处理一条。</li>
+      <li>9:00:20 之后新到的消息很少，可以忽略。</li>
+    </ul>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg class="wide" viewBox="0 0 760 152" role="img" aria-label="左边是选课事件主题的 6 个分区，积压约 1.2 万条，每条约 150 毫秒；右边是同一个普通消费组里的 20 个课表消费者。图中不画分区与消费者的对应关系。"><text x="20" y="22" class="lbl lbl-b">选课事件的主题 · 6 个分区</text><rect x="20" y="36" width="46" height="64" rx="4" class="part"/><text x="43" y="74" text-anchor="middle" class="lbl-amber lbl-mono">P0</text><rect x="74" y="36" width="46" height="64" rx="4" class="part"/><text x="97" y="74" text-anchor="middle" class="lbl-amber lbl-mono">P1</text><rect x="128" y="36" width="46" height="64" rx="4" class="part"/><text x="151" y="74" text-anchor="middle" class="lbl-amber lbl-mono">P2</text><rect x="182" y="36" width="46" height="64" rx="4" class="part"/><text x="205" y="74" text-anchor="middle" class="lbl-amber lbl-mono">P3</text><rect x="236" y="36" width="46" height="64" rx="4" class="part"/><text x="259" y="74" text-anchor="middle" class="lbl-amber lbl-mono">P4</text><rect x="290" y="36" width="46" height="64" rx="4" class="part"/><text x="313" y="74" text-anchor="middle" class="lbl-amber lbl-mono">P5</text><text x="20" y="122" class="lbl-m">积压约 1.2 万条 · 每条约 150 ms</text><text x="380" y="22" class="lbl lbl-b">课表服务的消费者 · 同一个普通消费组 · 扩到 20 个</text><use href="#i-cube" x="380" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="416" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="452" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="488" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="524" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="560" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="596" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="632" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="668" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="704" y="36" width="30" height="30" class="u-acc"/><use href="#i-cube" x="380" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="416" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="452" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="488" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="524" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="560" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="596" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="632" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="668" y="80" width="30" height="30" class="u-acc"/><use href="#i-cube" x="704" y="80" width="30" height="30" class="u-acc"/><text x="380" y="140" class="lbl-m">谁在消费哪个分区，由题中给出的规则决定</text></svg>
+    </div>
+    <figcaption><b>6 个分区，20 个消费者。</b>图里没有画对应关系。</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <caption>② 迁移账本 · 主任要的对照表，已知的部分</caption>
+      <thead><tr><th></th><th>迁移前</th><th>迁移后</th></tr></thead>
+      <tbody>
+        <tr><td>应用与离线的机器</td><td>34 台 4 核 8 GB + 8 台 8 核 32 GB</td><td>第二幕你们选定的 32 核 64 GB 节点 + 3 台 4 核 8 GB 的集群控制面</td></tr>
+        <tr><td>告警规则</td><td>260 条</td><td>增加约 50 条（节点、集群组件、配额）</td></tr>
+        <tr><td>值班</td><td>3 人轮值</td><td>3 人轮值；另需 1 人维护集群（升级、证书、节点故障）</td></tr>
+        <tr><td>离线推荐完成</td><td>约 04:00</td><td>按第二幕你们选定的方案</td></tr>
+        <tr><td>迁移后一个月内的事件</td><td>—</td><td>第一至第四幕</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="dataset">
+    <span class="tag">③ 下一步</span>
+    <div class="prose"><p>架构组有人提议："既然混部这么省，干脆把 MySQL、Redis、Kafka 和 Elasticsearch 也搬进集群，节点池统一管理。"</p></div>
+  </div>
+
+  <div class="prose"><p>主任翻着账本：</p></div>
+
+  <blockquote class="quote">
+    <div class="who"><svg viewBox="0 0 32 40" aria-hidden="true"><use href="#i-person" class="u-ink"/></svg><span>教务处主任</span></div>
+    <div><p>"省下的钱到底省在哪儿？多出来的又花在了哪儿？"</p><p>"还要不要接着搬？"</p></div>
+  </blockquote>
+
+  <div class="question">
+    <span class="pill">问题 5</span>
+    <h3>省在哪儿，花在哪儿，边界在哪儿？</h3>
+    <ol type="a">
+      <li>分别算出 3、6、20 个消费者时消化 1.2 万条积压要多久。扩到 20 个为什么没用？这一次该改的是什么，代价是什么？由此给出"伸缩之前先问的问题"，不超过 3 条。</li>
+      <li>列出迁移账本：省下了什么（用第二幕的结论算出机器台数、核数和内存的变化），新增了哪些成本。新增成本至少覆盖资源、可靠性、运维、完成时间或一致性四类，每类都用题中的数据举证。</li>
+      <li>评审"全部搬进集群"的提议：MySQL（选课库）、名额扣减 Redis、Kafka、Elasticsearch 各该不该搬，从有状态、放置、隔离三个角度说明理由（L-09、L-10）；给出你们的结论，以及结论成立的条件。</li>
+    </ol>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 作答要求 ============ -->
+<section class="block" id="req">
+  <div class="h-row"><span class="kicker">SUBMIT</span><h2>作答要求</h2></div>
+  <div class="prose">
+    <ol style="margin:0;padding-left:1.4em;display:grid;gap:8px">
+      <li>以小组为单位提交一份，五个问题都要作答，总篇幅建议 <span class="num">2500～3500</span> 字，可配图、表格和计算过程。文首列出小组成员（学号、姓名）。</li>
+      <li><strong>每个判断都要用场景中的数据或讲义中的概念支撑。</strong>不接受"容器更省""加机器就行""自动伸缩会处理"这类没有机制、没有度量的表述。</li>
+      <li>第四幕的时间线可以手绘后拍照插入，也可以用表格列出各时刻的需求与容量。</li>
+      <li>允许查阅资料，须用自己的话写，文末列出参考来源。</li>
+      <li>文件命名：<code>Q-3-组号.md</code>。</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 评分 ============ -->
+<section class="block" id="rubric">
+  <div class="h-row"><span class="kicker">RUBRIC</span><h2>评分标准</h2><span class="kicker">满分 10 分 · 每题 2 分</span></div>
+  <div class="rubric">
+    <div class="score">2</div><div>判断准确；用了场景数据或做了计算；能指出成立条件或边界（"在……情况下成立，在……情况下不成立"）</div>
+    <div class="score s1">1</div><div>方向正确但停留在概念复述，没有用数据，或只讲一面</div>
+    <div class="score s0">0</div><div>未作答、明显错误，或与题目无关</div>
+  </div>
+  <p class="hard"><strong>硬性条件</strong>　第 1 题须算出 limit 为 2 核和 4 核时每个周期的运行与被停时间，以及实时计算时的 RSS 和两种改法的数值；第 2 题须算出峰值之和与合并峰值，以及按 CPU、按内存分别需要的节点数；第 3 题须算出两种放法下"至少 2 个 broker 存活"的概率；第 4 题须给出需求与容量的时间线并算出缺口的起止时刻，以及方案 B 比方案 A 多花的实例·分钟；第 5 题须算出 3、6、20 个消费者时的消化时间，账本须覆盖至少四类新增成本并各有数据。缺任一项，该题最高 1 分。</p>
+</section>
+
+<!-- ============ 参考 ============ -->
+<section class="block" id="refs">
+  <div class="h-row"><span class="kicker">READING</span><h2>参考阅读</h2></div>
+  <ul class="refs">
+    <li>讲义：L-07（容量线）、L-09（CFS 配额、内存 limit、request 与 limit、QoS、超卖）、L-10（装箱、故障域、按"容量够"计算可用性、优先级与重调度、技术路线）、L-11（伸缩）</li>
+    <li>思考题 2 题面（场景与数据）</li>
+    <li>Kubernetes 文档：<a href="https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/">Resource Management for Pods and Containers</a></li>
+    <li>Kubernetes 文档：<a href="https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/">Horizontal Pod Autoscaling</a></li>
+    <li>A. Verma et al., <a href="https://research.google/pubs/large-scale-cluster-management-at-google-with-borg/">Large-scale cluster management at Google with Borg</a>, <em>EuroSys</em>, 2015</li>
+    <li>Apache Kafka 文档：<a href="https://kafka.apache.org/documentation/">Design（Consumer Groups）、Topic Configs（<code>min.insync.replicas</code>）</a></li>
+    <li><a href="https://go.dev/doc/go1.25">Go 1.25 Release Notes</a>（容器感知的 GOMAXPROCS）</li>
+  </ul>
+</section>
+
+<footer>
+  <span>互联网产品开发与运维 · 2026 秋</span>
+  <span>思考题 3 · 42 台机器，一个集群</span>
+</footer>
+
+</div>
+
+</body>
+</html>
